@@ -242,34 +242,113 @@ class ADC16():#katcp.RoachClient):
 		#Part of the read request is the size parameter,1024, which specifies the amount of bytes to read form the device
 		snapshot = self.snap.read(device,1024,offset=0)
 		
-		#struct unpack returns a tuple of int values
-		string_data = struct.unpack('>1024B', snapshot)
-		print(type(string_data))
-		print(type(string_data[0]))
+		#struct unpack returns a tuple of signed int values. 
+		#Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking 
+		#1024 bytes each of wich is b, signed char(in C, python only knows ints). Unpacking as
+		#a signed char is for mapping purposes:
+
+		# ADC returns values from 0 to 255 (since it's an 8 bit ADC), the voltage going into ADC
+		# varies from -1V to 1V, we want 0 to mean 0, not -1 volts so we need to remap the output 
+		# of the ADC to something more sensible, like -128 to 127. That way 0 volts corresponds to 
+		# a 0 value in the unpacked data. 
+		string_data = struct.unpack('>1024b', snapshot)
+#	 	print(type(string_data))
+#		print(type(string_data[0]))
 		#Converting the tuple into a vector of 1024 elements
 		array_data = np.array(string_data)
 #		print(array_data.dtype)	
 #		print(array_data)
-#		for i in range(array_data.shape[0]):
-#			print('{:08b}'.format(array_data[i]))	
-#			print('{:08b}'.format(array_data[i]))	
-##			
-##			
+		for i in range(array_data.shape[0]):
+			print('{:08b}'.format(array_data[i]))	
+		return array_data
+#			
+#			
 #			x = bin(array_data[i])
 #			print('{:>010b}'.format(x))
 #		print(array_data.shape)
-		j = 0
-		k = 1
-		while j < 1024:
-			print('{:08b}'.format(array_data[j]))	
-			print('{:08b}'.format(array_data[k]))	
-			j += 8
-#			k += 4
+#		j = 0
+#		k = 1
+#		while j < 1024:
+#			print('{:08b}'.format(array_data[j]))	
+#			print('{:08b}'.format(array_data[k]))	
+#			j += 8
+#			k += 8
 	#function that tests taps, it shifts data checks with the expected data and ouputs the error count
 
 	
 	#The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of A and B lanes, respectively.
 	#Refer to the memory map word 2 and word 3 for any calirification. The memory map was made for a ROACH design so it has chips A-H. 
 	#SNAP 1 design has three chips
-	#def delay_tap(self,tap)
-	#	{
+	
+##	def chip_select(self, chip):
+#		if chip =='A'|'a':
+#			self.snap.write_int('adc16_controller', 1, offset=1)
+#		elif chip
+
+	def delay_tap(self,tap)
+		delay_tap_mask = 0x1f
+		self.snap.write_int('adc16_controller', 0 , offset = 2)
+		self.snap.write_int('adc16_controller', 0 , offset = 3)
+		#Set tap bits
+		self.snap.write_int('adc16_controller', delay_tap_mask & tap , offset = 1)
+		#Set strobe bits
+		self.snap.write_int('adc16_controller', 0xfff, offset = 2)
+		self.snap.write_int('adc16_controller', 0xfff, offset = 3)
+		#Clear all bits
+		self.snap.write_int('adc16_controller', 0 , offset = 1)
+		self.snap.write_int('adc16_controller', 0 , offset = 2)
+		self.snap.write_int('adc16_controller', 0 , offset = 3)
+	
+
+	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
+	def test_tap(self, tap)
+		expected = 0x2a
+		self.delay_tap(tap)
+		#read_ram reuturns an array of data form a sanpshot from ADC output
+		data = self.read_ram('adc16_wb_ram0')
+		#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
+		error_count = []
+		i=0
+		while i < 1024:
+			if data[i] != 0:
+				chan1a_error += 1
+			if data[i+1] != 0:
+				chan1b_error += 1
+			if data[i+2] != 0:
+				chan2a_error += 1
+			if data[i+3] != 0:
+				chan2b_error += 1
+			if data[i+4] != 0:
+				chan3a_error += 1
+
+			if data[i+5] != 0:
+				chan3b_error += 1
+			if data[i+6] != 0:
+				chan4a_error += 1
+			if data[i+7] != 0:
+				chanf4b_error += 1
+			i += 8
+
+		return([chan1a_error, chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
+
+	def walk_tap(self):
+		self.enable_pattern('deskew')
+		
+		for i in range(8):
+			for tap in range(32):
+				error_count = self.test_tap(tap)
+				if error_count[i] ==0:
+					good_tap_min = i
+
+
+
+		for tap in range(32):
+			error_count = self.test_tap(tap)
+			
+			if error_count[i] ==0
+			for i in range(error_count.shape[0]):
+				if error_count[i]==0:
+					while j < 32:
+								
+		#Test taps 0 and 31 first to see if they 
+
