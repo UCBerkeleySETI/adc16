@@ -258,8 +258,9 @@ class ADC16():#katcp.RoachClient):
 		array_data = np.array(string_data)
 #		print(array_data.dtype)	
 #		print(array_data)
-		for i in range(array_data.shape[0]):
-			print('{:08b}'.format(array_data[i]))	
+#		for i in range(array_data.shape[0]):
+#			print('{:08b}'.format(array_data[i]))	
+		#print(array_data)
 		return array_data
 #			
 #			
@@ -285,7 +286,7 @@ class ADC16():#katcp.RoachClient):
 #			self.snap.write_int('adc16_controller', 1, offset=1)
 #		elif chip
 
-	def delay_tap(self,tap)
+	def delay_tap(self,tap):
 		delay_tap_mask = 0x1f
 		self.snap.write_int('adc16_controller', 0 , offset = 2)
 		self.snap.write_int('adc16_controller', 0 , offset = 3)
@@ -301,54 +302,106 @@ class ADC16():#katcp.RoachClient):
 	
 
 	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-	def test_tap(self, tap)
+	def test_tap(self, tap):
 		expected = 0x2a
 		self.delay_tap(tap)
 		#read_ram reuturns an array of data form a sanpshot from ADC output
 		data = self.read_ram('adc16_wb_ram0')
 		#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
 		error_count = []
+
+		chan1a_error = 0
+		chan1b_error = 0
+		chan2a_error = 0
+		chan2b_error = 0
+		chan3a_error = 0
+		chan3b_error = 0
+		chan4a_error = 0
+		chan4b_error = 0
+	
+	
+	
+	
 		i=0
 		while i < 1024:
-			if data[i] != 0:
+			if data[i] != expected:
 				chan1a_error += 1
-			if data[i+1] != 0:
+			if data[i+1] != expected:
 				chan1b_error += 1
-			if data[i+2] != 0:
+			if data[i+2] != expected:
 				chan2a_error += 1
-			if data[i+3] != 0:
+			if data[i+3] != expected:
 				chan2b_error += 1
-			if data[i+4] != 0:
+			if data[i+4] != expected:
 				chan3a_error += 1
 
-			if data[i+5] != 0:
+			if data[i+5] != expected:
 				chan3b_error += 1
-			if data[i+6] != 0:
+			if data[i+6] != expected:
 				chan4a_error += 1
-			if data[i+7] != 0:
-				chanf4b_error += 1
+			if data[i+7] != expected:
+				chan4b_error += 1
 			i += 8
 
 		return([chan1a_error, chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
 
-	def walk_tap(self):
+	def walk_taps(self):
 		self.enable_pattern('deskew')
-		
-		for i in range(8):
-			for tap in range(32):
-				error_count = self.test_tap(tap)
-				if error_count[i] ==0:
-					good_tap_min = i
-
-
-
+		error_list = []
 		for tap in range(32):
-			error_count = self.test_tap(tap)
-			
-			if error_count[i] ==0
-			for i in range(error_count.shape[0]):
-				if error_count[i]==0:
-					while j < 32:
-								
-		#Test taps 0 and 31 first to see if they 
+			error_list.append(self.test_tap(tap))
+		good_tap_range = []	
+		best_tap_range = []
+#		print(error_list)
+		min_tap=[]
+		max_tap=[]
+		#This loop is kind of convoluted but it basically goes through error_list, finds the elements with a value of 0 and appends them to a new list 
+		#It also picks out the elements corresponding to different channels and groups them together. The error_list is a list where each 'row' is a different tap
+		#I wanted to find the elements in each channel that have zero errors, group the individual channels, and get the value of the tap in which they're in - which is the index of the row
 
+		for i in range(8):
+			good_tap_range.append([])
+			for j in range(32):
+				if error_list[j][i]==0:
+					good_tap_range[i].append(j)
+	#	find the min and max of each element of good tap range and call delay tap with that 
+	
+		for k in range(8):
+			min_tap = min(good_tap_range[k])
+			max_tap = max(good_tap_range[k])
+
+			best_tap = (min_tap+max_tap)/2
+
+		#	self.delay_tap(best_tap)
+		print(good_tap_range)
+		
+		
+		
+
+		#set the middle tap as the probably tap to make the most accurate pattern
+
+		#delay_taps
+		
+
+
+		
+#
+#		k = 0
+#		while k < 32:
+#         		i=0
+#         		good_tap_range.append([])
+#			#print(k)
+#          		while error_list[k][0]==0:
+#                    		good_tap_range[j].append(i)
+#                    		k +=1
+#                    		i+=1	
+#				j +=1	
+#				print(k)
+#
+#			k+=1	
+#		print(good_tap_range)
+#
+
+
+							
+		#Test taps 0 and 31 first to see if they 
