@@ -36,10 +36,10 @@ a.power_up()
 #a.write_adc(0x25,0x0040)
 #print(a.read_int('adc16_wb_ram0'))
 
-a.enable_pattern('ramp')
+a.enable_pattern('deskew')
 
 a.read_ram('adc16_wb_ram0')
-
+a.walk_taps()
 #a.list_reg()
 #a.write_reg()
 #a.read_reg()
