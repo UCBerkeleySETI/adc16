@@ -286,15 +286,60 @@ class ADC16():#katcp.RoachClient):
 #			self.snap.write_int('adc16_controller', 1, offset=1)
 #		elif chip
 
-	def delay_tap(self,tap):
+	def delay_tap(self,tap,channel):
+		
+
+		if channel == 'all':
+			chan_select = 0xff
+			
+
+			delay_tap_mask = 0x1f
+			self.snap.write_int('adc16_controller', 0 , offset = 2)
+			self.snap.write_int('adc16_controller', 0 , offset = 3)
+			#Set tap bits
+			self.snap.write_int('adc16_controller', delay_tap_mask & tap , offset = 1)
+			#Set strobe bits
+			self.snap.write_int('adc16_controller', 0xfff, offset = 2)
+			self.snap.write_int('adc16_controller', 0xfff, offset = 3)
+			#Clear all bits
+			self.snap.write_int('adc16_controller', 0 , offset = 1)
+			self.snap.write_int('adc16_controller', 0 , offset = 2)
+			self.snap.write_int('adc16_controller', 0 , offset = 3)
+			return
+		elif channel == '1a':
+			chan_select = 0x111
+			lane_offset = 2
+		elif channel == '1b':
+			chan_select = 0x111
+			lane_offset = 3
+		elif channel == '2a':
+			chan_select = 0x222
+			lane_offset = 2
+		elif channel == '2b':
+			chan_select = 0x222
+			lane_offset = 3
+		elif channel == '3a':
+			chan_select = 0x444
+			lane_offset = 2
+		elif channel == '3b':
+			chan_select = 0x444
+			lane_offset = 3
+		elif channel == '4a':
+			chan_select = 0x888
+			lane_offset = 2
+		elif channel == '4b':
+			chan_select = 0x888
+			lane_offset = 3
+		
+
+
+
 		delay_tap_mask = 0x1f
-		self.snap.write_int('adc16_controller', 0 , offset = 2)
-		self.snap.write_int('adc16_controller', 0 , offset = 3)
+		self.snap.write_int('adc16_controller', 0 , offset = lane_offset)
 		#Set tap bits
 		self.snap.write_int('adc16_controller', delay_tap_mask & tap , offset = 1)
 		#Set strobe bits
-		self.snap.write_int('adc16_controller', 0xfff, offset = 2)
-		self.snap.write_int('adc16_controller', 0xfff, offset = 3)
+		self.snap.write_int('adc16_controller', chan_select , offset = lane_offset)
 		#Clear all bits
 		self.snap.write_int('adc16_controller', 0 , offset = 1)
 		self.snap.write_int('adc16_controller', 0 , offset = 2)
@@ -302,9 +347,9 @@ class ADC16():#katcp.RoachClient):
 	
 
 	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-	def test_tap(self, tap):
+	def test_tap(self, tap,channel):
 		expected = 0x2a
-		self.delay_tap(tap)
+		self.delay_tap(tap,channel)
 		#read_ram reuturns an array of data form a sanpshot from ADC output
 		data = self.read_ram('adc16_wb_ram0')
 		#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
@@ -346,10 +391,11 @@ class ADC16():#katcp.RoachClient):
 		return([chan1a_error, chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
 
 	def walk_taps(self):
+		channels = {0:'1a',1:'1b',2:'2a',3:'2b',4:'3a',5:'3b',6:'4a',7:'4b'}	 
 		self.enable_pattern('deskew')
 		error_list = []
 		for tap in range(32):
-			error_list.append(self.test_tap(tap))
+			error_list.append(self.test_tap(tap,'all'))
 		good_tap_range = []	
 		best_tap_range = []
 #		print(error_list)
@@ -365,43 +411,14 @@ class ADC16():#katcp.RoachClient):
 				if error_list[j][i]==0:
 					good_tap_range[i].append(j)
 	#	find the min and max of each element of good tap range and call delay tap with that 
-	
+		print(good_tap_range)
 		for k in range(8):
 			min_tap = min(good_tap_range[k])
 			max_tap = max(good_tap_range[k])
 
 			best_tap = (min_tap+max_tap)/2
-
-		#	self.delay_tap(best_tap)
-		print(good_tap_range)
+			print(best_tap)
+			self.delay_tap(best_tap,channels[k])
 		
-		
-		
-
-		#set the middle tap as the probably tap to make the most accurate pattern
-
-		#delay_taps
-		
-
-
-		
-#
-#		k = 0
-#		while k < 32:
-#         		i=0
-#         		good_tap_range.append([])
-#			#print(k)
-#          		while error_list[k][0]==0:
-#                    		good_tap_range[j].append(i)
-#                    		k +=1
-#                    		i+=1	
-#				j +=1	
-#				print(k)
-#
-#			k+=1	
-#		print(good_tap_range)
-#
-
-
-							
-		#Test taps 0 and 31 first to see if they 
+		print(self.read_ram('adc16_wb_ram0'))
+			
