@@ -133,19 +133,9 @@ katcp_port=7147
 
 
 class ADC16():#katcp.RoachClient):
-#	DEVICE_TYPEMAP = {
-#			'adc16_controller' : 'bram',
-#			'adc16_wb_ram0' : 'bram',
-#			'adc16_wb_ram1' : 'bram',
-#			'adc16_wb_ram2' : 'bram',
-#			}
-#
-#
-#	def device_typemap(self):
-#		self.device_typemap |= copy.deepcopy(DEVICE_TYPEMAP)
 
 	def __init__(self,**kwargs):
-		#print(kwargs['host'])	
+		chips = {'a':0,'b':1,'c':2,'d':3,'e':4,'f':5,'g':6,'h':7}
 		self.snap = corr.katcp_wrapper.FpgaClient(kwargs['host'],katcp_port,timeout=10)
 		time.sleep(1)
 		if  self.snap.is_connected():
@@ -156,6 +146,10 @@ class ADC16():#katcp.RoachClient):
 			print('Programming with bof file....')
 			self.snap.progdev(kwargs['bof'])
 			print('Programmed!')
+
+	def chip_select(self, chip):
+		state = (1 << self.chips[chip]) | 0x0000
+		self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)			
 
 	def write_adc(self,addr,data):
 		SCLK = 0x200
@@ -219,7 +213,19 @@ class ADC16():#katcp.RoachClient):
 #                                print('Programmed %s with bof file, but design is not ADC16-based'%self.kwargs['host'])
 #                                exit(1)
 
-
+# Selects a test pattern or sampled data for all ADCs selected by
+  # +chip_select+.  +ptn+ can be any of:
+  #
+  #   :ramp            Ramp pattern 0-255
+  #   :deskew (:eye)   Deskew pattern (10101010)
+  #   :sync (:frame)   Sync pattern (11110000)
+  #   :custom1         Custom1 pattern
+  #   :custom2         Custom2 pattern
+  #   :dual            Dual custom pattern
+  #   :none            No pattern (sampled data)
+  #
+  # Default is :ramp.  Any value other than shown above is the same as :none
+  # (i.e. pass through sampled data).
 
 	def enable_pattern(self,pattern):                                                                                           
                 if pattern=='ramp':
@@ -244,7 +250,7 @@ class ADC16():#katcp.RoachClient):
 		
 		#struct unpack returns a tuple of signed int values. 
 		#Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking 
-		#1024 bytes each of wich is b, signed char(in C, python only knows ints). Unpacking as
+		#1024 bytes each of which is a signed char(in C, python only knows ints). Unpacking as
 		#a signed char is for mapping purposes:
 
 		# ADC returns values from 0 to 255 (since it's an 8 bit ADC), the voltage going into ADC
@@ -278,13 +284,17 @@ class ADC16():#katcp.RoachClient):
 
 	
 	#The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of A and B lanes, respectively.
-	#Refer to the memory map word 2 and word 3 for any calirification. The memory map was made for a ROACH design so it has chips A-H. 
+	#Refer to the memory map word 2 and word 3 for clarification. The memory map was made for a ROACH design so it has chips A-H. 
 	#SNAP 1 design has three chips
-	
-##	def chip_select(self, chip):
-#		if chip =='A'|'a':
-#			self.snap.write_int('adc16_controller', 1, offset=1)
-#		elif chip
+	def bitslip(self):
+		bitslip_shift = 8
+		for key,value in self.chips.items():
+			self.chip_select(key)
+			state = 1 << bitslip_shift + value
+			self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+			self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
+			self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+			
 
 	def delay_tap(self,tap,channel):
 		
@@ -353,6 +363,7 @@ class ADC16():#katcp.RoachClient):
 		#read_ram reuturns an array of data form a sanpshot from ADC output
 		data = self.read_ram('adc16_wb_ram0')
 		#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
+		print(data)
 		error_count = []
 
 		chan1a_error = 0
