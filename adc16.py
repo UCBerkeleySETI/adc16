@@ -135,11 +135,32 @@ katcp_port=7147
 class ADC16():#katcp.RoachClient):
 
 	def __init__(self,**kwargs):
-		chips = {'a':0,'b':1,'c':2,'d':3,'e':4,'f':5,'g':6,'h':7}
-		self.snap = corr.katcp_wrapper.FpgaClient(kwargs['host'],katcp_port,timeout=10)
-		time.sleep(1)
-		if  self.snap.is_connected():
-			print('Connected to SNAP')	
+		#katcp_port to connect to with FpgaClient			
+		self.katcp_port = 7147
+		#Make a dictionary out of chips specified on command line. 
+		#mapping chip letters to numbers to facilitate writing to adc16_controller
+		self.chips = {}
+		for chip in kwargs['chips']:
+			if chip == 'a':
+				self.chips['a'] = 0
+			elif chip == 'b':
+				self.chips['b'] = 1
+			elif chip == 'c':
+				self.chips['c'] = 2
+
+			elif chip == 'd':
+				self.chips['d'] = 3
+			elif chip == 'e':
+				self.chips['e'] = 4
+			elif chip == 'f':
+				self.chips['f'] = 5
+			elif chip == 'g':
+				self.chips['g'] = 6
+			elif chip == 'h':
+				self.chips['h'] = 7
+
+
+		#Dealing with flags passed into argsparse at the prompt by the user
 		if kwargs['skip_flag'] == True:
 			print('Not programming the bof file')
 		else:
@@ -147,10 +168,27 @@ class ADC16():#katcp.RoachClient):
 			self.snap.progdev(kwargs['bof'])
 			print('Programmed!')
 
+		if kwargs['verbosity'] == True:
+			def verboseprint(*args):
+				for arg in args:
+					print('\n',arg)
+		else:
+			verboseprint = lambda *a: None 
+		
+		self.verboseprint('Connecting to SNAP.....')
+		#Instantiating a snap object with attributes of FpgaClient class
+		self.snap = corr.katcp_wrapper.FpgaClient(kwargs['host'], self.katcp_port, timeout=10)
+		time.sleep(1)
+
+		if  self.snap.is_connected():
+			print('Connected to SNAP!')	
+
+
 	def chip_select(self, chip):
 		state = (1 << self.chips[chip]) | 0x0000
 		self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)			
-
+	#write_adc is used for writing specific ADC registers.
+	#ADC controller can only write to adc one bit at a time at rising clock edge
 	def write_adc(self,addr,data):
 		SCLK = 0x200
 		CS = 0x00000001
@@ -175,13 +213,22 @@ class ADC16():#katcp.RoachClient):
 		
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
 
-	def reset(self):
+
+
+	def adc_init_seq(self):
+		#reset adc	
                 self.write_adc(0x00,0x0001)
-                                                                                                                                    
-	def power_down(self):
-                self.write_adc(0x0f,0x0200)	
-	def power_up(self):
-                self.write_adc(0x0f,0x0000)
+                #power adc down
+		self.write_adc(0x0f,0x0200)	
+                #power adc up
+		self.write_adc(0x0f,0x0000)
+#	def reset(self):
+#                self.write_adc(0x00,0x0001)
+#                                                                                                                                    
+#	def power_down(self):
+#                self.write_adc(0x0f,0x0200)	
+#	def power_up(self):
+#                self.write_adc(0x0f,0x0000)
        
 #	def supports_demux(self):
 #                #adc16_controller supports demux modes if the W bit(0x04000000) is not set to 1 so this function returns true if
@@ -286,16 +333,19 @@ class ADC16():#katcp.RoachClient):
 	#The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of A and B lanes, respectively.
 	#Refer to the memory map word 2 and word 3 for clarification. The memory map was made for a ROACH design so it has chips A-H. 
 	#SNAP 1 design has three chips
-	def bitslip(self):
+	def bitslip(self,value):
 		bitslip_shift = 8
+		state = 1 << bitslip_shift + value
+		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+		self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
+		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+			
+	def sync_chips(self):
+		sync_expected = 0x70
 		for key,value in self.chips.items():
 			self.chip_select(key)
-			state = 1 << bitslip_shift + value
-			self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-			self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
-			self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-			
-
+			data = self.read_ram('adc16_wb_ram0')
+		
 	def delay_tap(self,tap,channel):
 		
 
@@ -432,4 +482,34 @@ class ADC16():#katcp.RoachClient):
 			self.delay_tap(best_tap,channels[k])
 		
 		print(self.read_ram('adc16_wb_ram0'))
+	def sync_chips(self):
+		self.enable_pattern('sync')
+		self.sync_expected = 0x70
+		 			
+		for key,value in self.chips.items():
+			self.chip_select(key)
+			snapshot = self.read_ram('adc16_wb_ram%i' %value)
+			while snapshot[0] != self.sync_expected:
+				self.bitslip(value)
+				snapshot = self.read_ram('adc16_wb_ram%i' %value)
 			
+	def calibrate(self):
+		
+		#check if clock is locked
+		if self.snap.est_brd_clk():
+			print('ADC clock is locked!!')
+		else:
+			print('ADC clock not locked, check signal connection!')
+
+
+		self.walk_taps()
+		self.sync_chips()
+			
+
+
+
+
+
+
+
+
