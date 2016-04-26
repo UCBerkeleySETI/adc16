@@ -194,20 +194,20 @@ class ADC16():#katcp.RoachClient):
 		CS = 0x00000001
 		IDLE = SCLK
 		SDA_SHIFT = 8
-		addr = np.atleast_1d(addr)
-		data = np.atleast_1d(data)
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
-		for i in range(addr.shape[0]):
-			addr_bit = (addr>>i)&1
+		for i in range(8):
+			addr_bit = (addr>>(8-i-1))&1
 			state = (addr_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
+		#	print(np.binary_repr(state,width=32))
 			state = (addr_bit<<SDA_SHIFT) | CS | SCLK
-		
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
-		for j in range(data.shape[0]):
-			data_bit = (data>>j)&1
+		#	print(np.binary_repr(state,width=32))
+		for j in range(16):
+			data_bit = (data>>(16-j-1))&1
 			state = (data_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
+		#	print(np.binary_repr(state,width=32))
 			state =( data_bit<<SDA_SHIFT) | CS | SCLK	
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)		
 		
