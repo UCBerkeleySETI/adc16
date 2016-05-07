@@ -5,7 +5,8 @@ import os
 import sys
 import numpy as np
 import struct
-#from corr import katcp_wrapper
+import logging
+from pprint import pprint
 katcp_port=7147
 
 
@@ -135,63 +136,63 @@ katcp_port=7147
 class ADC16():#katcp.RoachClient):
 
 	def __init__(self,**kwargs):
+		if kwargs['verbosity'] == True:
+			logging.basicConfig(level = logging.DEBUG)
+		else:
+			logging.basicConfig(level = logging.INFO)
 		#katcp_port to connect to with FpgaClient			
 		self.katcp_port = 7147
 		#Make a dictionary out of chips specified on command line. 
 		#mapping chip letters to numbers to facilitate writing to adc16_controller
-		self.chips = {}
-		self.demux_mode = kwargs['demux_mode']
-		for chip in kwargs['chips']:
-			if chip == 'a':
-				self.chips['a'] = 0
-			elif chip == 'b':
-				self.chips['b'] = 1
-			elif chip == 'c':
-				self.chips['c'] = 2
-
-			elif chip == 'd':
-				self.chips['d'] = 3
-			elif chip == 'e':
-				self.chips['e'] = 4
-			elif chip == 'f':
-				self.chips['f'] = 5
-			elif chip == 'g':
-				self.chips['g'] = 6
-			elif chip == 'h':
-				self.chips['h'] = 7
-
-		if kwargs['verbosity'] == True:
-			def verboseprint(*args):
-				for arg in args:
-					print('\n',arg)
-		else:
-			self.verboseprint = lambda *a: None 
 		
-		print('Connecting to SNAP.....')
+		self.demux_mode = kwargs['demux_mode']		
+
+	
+		#create a chip dictionary to facilitate writing to adc16_controller	
+		self.chips = {}
+		self.chip_select_a = 0
+		self.chip_select_b = 0
+		self.chip_select_c = 0
+		for chip in kwargs['chips']:
+			if chip == 'a'or chip == 'A':
+				self.chips['a'] = 0
+				self.chip_select_a = 1 << self.chips['a']
+			elif chip == 'b' or chip ==  'B':
+				self.chips['b'] = 1
+				self.chip_select_b = 1 << self.chips['b']
+			elif chip == 'c' or chip == 'C':
+				self.chips['c'] = 2
+				self.chip_select_c = 1 << self.chips['c']
+			else:
+				logging.error('Invalid chip name passed, available values: a, b or c, default is all chips selected')
+				exit(1)
+		self.chip_select = self.chip_select_a + self.chip_select_b + self.chip_select_c
+
+			
 		#Instantiating a snap object with attributes of FpgaClient class
+		print('Connecting to SNAP.....')
 		self.snap = corr.katcp_wrapper.FpgaClient(kwargs['host'], self.katcp_port, timeout=10)
 		time.sleep(1)
 
 		if  self.snap.is_connected():
 			print('Connected to SNAP!')	
-
+		else:
+			logging.error('Couldn\'t connect to SNAP, check your connection..')
+			exit(1)
 		#Dealing with flags passed into argsparse at the prompt by the user
 		if kwargs['skip_flag'] == True:
 			print('Not programming the bof file')
 		else:
-			print('Programming with bof file....')
+			print('Programming the bof file....')
 			self.snap.progdev(kwargs['bof'])
 			print('Programmed!')
 
 		
-	def chip_select(self, chip):
-		state = (1 << self.chips[chip]) | 0x0000
-		self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)			
 	#write_adc is used for writing specific ADC registers.
 	#ADC controller can only write to adc one bit at a time at rising clock edge
 	def write_adc(self,addr,data):
 		SCLK = 0x200
-		CS = 0x00000001
+		CS = self.chip_select
 		IDLE = SCLK
 		SDA_SHIFT = 8
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
@@ -199,29 +200,36 @@ class ADC16():#katcp.RoachClient):
 			addr_bit = (addr>>(8-i-1))&1
 			state = (addr_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
-		#	print(np.binary_repr(state,width=32))
+			logging.debug("Printing address state written to adc16_controller, offset=0, clock low")
+			logging.debug(np.binary_repr(state,width=32))
 			state = (addr_bit<<SDA_SHIFT) | CS | SCLK
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
-		#	print(np.binary_repr(state,width=32))
+			logging.debug("Printing address state written to adc16_controller, offset=0, clock high")
+			logging.debug(np.binary_repr(state,width=32))
 		for j in range(16):
 			data_bit = (data>>(16-j-1))&1
 			state = (data_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
-		#	print(np.binary_repr(state,width=32))
+			logging.debug("Printing data state written to adc16_controller, offset=0, clock low")
+			logging.debug(np.binary_repr(state,width=32))
 			state =( data_bit<<SDA_SHIFT) | CS | SCLK	
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)		
+			logging.debug("Printing data address state written to adc16_controller, offset=0, clock high")
+			logging.debug(np.binary_repr(state,width=32))
 		
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
 
-
-
-	def adc_init_seq(self):
-		#reset adc	
-                self.write_adc(0x00,0x0001)
-                #power adc down
+	def power_cycle(self):
+		logging.info('Power cycling the ADC')
+		#power adc down
 		self.write_adc(0x0f,0x0200)	
                 #power adc up
 		self.write_adc(0x0f,0x0000)
+
+	def adc_reset(self):
+		logging.info('Initializing le ADC')
+		#reset adc	
+                self.write_adc(0x00,0x0001)
        
 #	def supports_demux(self):
 #                #adc16_controller supports demux modes if the W bit(0x04000000) is not set to 1 so this function returns true if
@@ -232,8 +240,15 @@ class ADC16():#katcp.RoachClient):
 #                self.snap.write_int('adc16_controller', 0x0400_0000, offset=1)
 #                #reading adc16_controller and returing True if it is 0, which means that W bit could not be written to
 #                return (self.snap.read_int('adc16_controller',offset=1)==0)
-        
-	def set_demux(self):
+
+
+
+
+
+	def set_demux_adc(self):
+		if self.demux_mode==2:
+			self.write_adc(0x31,0x0102) 
+	def set_demux_fpga(self):
 		demux_shift = 24
                 if self.demux_mode==1:
 			state = (4+0) << demux_shift
@@ -284,13 +299,12 @@ class ADC16():#katcp.RoachClient):
 		elif pattern=='custom':
 			self.write_adc(0x26,0xff00)
                 else:
-                        print('Pattern specified not found, possible options: ramp, deskew and sync')
+                        logging.error('Pattern specified not found, possible options: ramp, deskew and sync')
                         exit(1)
 
 
 	def read_ram(self,device):
 		SNAP_REQ = 0x00010000
-		bin_data = []
 		self.snap.write_int('adc16_controller',0, offset=1,blindwrite=True)
 		self.snap.write_int('adc16_controller',SNAP_REQ, offset=1,blindwrite=True)
 		#Read the device that is passed to the read_ram method,1024 elements at a time,snapshot is a binary string that needs to get unpacked
@@ -307,12 +321,8 @@ class ADC16():#katcp.RoachClient):
 		# of the ADC to something more sensible, like -128 to 127. That way 0 volts corresponds to 
 		# a 0 value in the unpacked data. 
 		string_data = struct.unpack('>1024b', snapshot)
-#	 	print(type(string_data))
-#		print(type(string_data[0]))
 		#Converting the tuple into a vector of 1024 elements
 		array_data = np.array(string_data)
-#		print(array_data.dtype)	
-#		print(array_data)
 #		for i in range(array_data.shape[0]):
 #			print('{:08b}'.format(array_data[i]))	
 		#print(array_data)
@@ -342,11 +352,11 @@ class ADC16():#katcp.RoachClient):
 		self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
 		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
 			
-	def sync_chips(self):
-		sync_expected = 0x70
-		for key,value in self.chips.items():
-			self.chip_select(key)
-			data = self.read_ram('adc16_wb_ram0')
+#	def sync_chips(self):
+#		sync_expected = 0x70
+#		for key,value in self.chips.items():
+#			self.chip_select(key)
+#			data = self.read_ram('adc16_wb_ram0')
 		
 	def delay_tap(self,tap,channel):
 		
@@ -409,11 +419,12 @@ class ADC16():#katcp.RoachClient):
 	
 
 	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-	def test_tap(self, tap,channel):
+	def test_tap(self,chip,tap,channel):
 		expected = 0x2a
 		self.delay_tap(tap,channel)
 		#read_ram reuturns an array of data form a sanpshot from ADC output
-		data = self.read_ram('adc16_wb_ram0')
+		
+		data = self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip]))
 		#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
 #		data[data<0] += 128	
 #		print('Printing data from test_tap method..tap%i\n'%tap)
@@ -459,42 +470,72 @@ class ADC16():#katcp.RoachClient):
 		return([chan1a_error, chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
 
 	def walk_taps(self):
-		print('Setting deskew pattern...')
+		for chip in self.chips:
+			logging.info('Callibrating chip %s...'%chip)	
+			logging.info('Setting deskew pattern...')
 
-		self.enable_pattern('deskew')
-		error_list = []
-		for tap in range(32):
-			error_list.append(self.test_tap(tap,'all'))
-		good_tap_range = []	
-		best_tap_range = []
-		print('Printing the list of errors, each row is a tap\n')
-		print(error_list)
-		min_tap=[]
-		max_tap=[]
-		#This loop is kind of convoluted but it basically goes through error_list, finds the elements with a value of 0 and appends them to the good tap range list 
-		#It also picks out the elements corresponding to different channels and groups them together. The error_list is a list where each 'row' is a different tap
-		#I wanted to find the elements in each channel that have zero errors, group the individual channels, and get the value of the tap in which they're in - which is the index of the row
+			self.enable_pattern('deskew')
 
-		for i in range(8):
-			good_tap_range.append([])
-			for j in range(32):
-				if error_list[j][i]==0:
-					good_tap_range[i].append(j)
-	#	find the min and max of each element of good tap range and call delay tap with that 
-		self.verboseprint('Printing good tap values for each channel...each row corresponds to different channel')
-		self.verboseprint(good_tap_range)
-		print('Printing the range of good to use taps...from the walk_taps method\n')
-		print(good_tap_range)
-		channels = ['1a','1b','2a','2b','3a','3b','4a','4b']
-		for k in range(8):
-			min_tap = min(good_tap_range[k])
-			max_tap = max(good_tap_range[k])
+			#check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True. 
+			#This is to make sure that the eye of the pattern is swept completely
+#			chan_counts_0 = np.array(self.test_tap(chip,0,'all'))
+#			chan_counts_31 = np.array(self.test_tap(chip,31,'all'))
+#			for i in range(len(chan_counts_0)):
+#				if chan_counts_0[i] ==0 or chan_counts_31[i] ==0:
+#					self.bitslip(self.chip_select)
+#					
+#					chan_counts_0 = np.array(self.test_tap(chip,0,'all'))
+#					chan_counts_31 = np.array(self.test_tap(chip,31,'all'))
+	#		for errors in chan_counts_0:
+	#			if errors ==0:
+	#				self.bitslip(self.chip_select)
+	#				break
+	#		for errors in chan_counts_1:
+	#			if errors ==0:
+	#				self.bitslip(self.chip_select)
+	#				break
+			#error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors  	
+			#of that lane  when compared to the expected value. read_ram method unpacks 1024 bytes. There are 8
+			#lanes so each lane gets 1024/8=128 read outs from a single call to read_ram method, like this, channel_1a etc. represent the errors in that channel
+			# tap 0: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
+			# tap 1: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
+			# .....: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
+			# tap 31:[ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
+			error_list = []
+			for tap in range(32):
+				error_list.append(self.test_tap(chip,tap,'all'))
+			good_tap_range = []	
+			best_tap_range = []
+			print('Printing the list of errors, each row is a tap\n')
+			pprint(error_list)
+			min_tap=[]
+			max_tap=[]
+			#This loop is kind of convoluted but it basically goes through error_list, finds the elements with a value of 0 and appends them to the good tap range list 
+			#It also picks out the elements corresponding to different channels and groups them together. The error_list is a list where each 'row' is a different tap
+			#I wanted to find the elements in each channel that have zero errors, group the individual channels, and get the value of the tap in which they're in - which is the index of the row
 
-			best_tap = (min_tap+max_tap)/2
-		#	print(best_tap)
-			self.delay_tap(best_tap,channels[k])
-		print('\n Printing the calibrated data from ram0.....\n')
-		print(self.read_ram('adc16_wb_ram0'))
+			for i in range(8):
+				good_tap_range.append([])
+				#j represents the tap value
+				for j in range(32):
+					#i represents the channel/lane value
+					if error_list[j][i]==0:
+						good_tap_range[i].append(j)
+		#	find the min and max of each element of good tap range and call delay tap 
+			logging.info('Printing good tap values for each channel...each row corresponds to different channel')
+			pprint(good_tap_range)
+
+
+			channels = ['1a','1b','2a','2b','3a','3b','4a','4b']
+			for k in range(8):
+				min_tap = min(good_tap_range[k])
+				max_tap = max(good_tap_range[k])
+
+				best_tap = (min_tap+max_tap)/2
+			#	print(best_tap)
+				self.delay_tap(best_tap,channels[k])
+			print('Printing the calibrated data from ram{0}.....'.format(self.chips[chip]))
+			pprint(self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip])))
 
 
 
@@ -509,15 +550,22 @@ class ADC16():#katcp.RoachClient):
 				self.bitslip(value)
 				snapshot = self.read_ram('adc16_wb_ram%i' %value)
 			
-	def calibrate(self):
-		
-		#check if clock is locked
+	def clock_locked(self):
 		if self.snap.est_brd_clk():
-			print('ADC clock is locked!!')
+			logging.info('ADC clock is locked!!!')
 		else:
-			print('ADC clock not locked, check signal connection!')
-		self.adc_init_seq()	
-#		self.set_demux()
+			logging.warning('ADC clock not locked, check your clock source/correctly set demux mode')
+			logging.warning('Exiting...')
+			exit(1)
+	def calibrate(self):
+		#Important initializing sequence: reset adc, program all registers 
+		# ,power cycle. Demux mode on ADC must be set. 
+		self.adc_reset()	
+		self.set_demux_adc()
+		self.power_cycle()
+		#check if clock is locked
+		self.clock_locked()
+		#Calibrate ADC by going through various tap values
 		self.walk_taps()
 #		self.sync_chips()
 			
