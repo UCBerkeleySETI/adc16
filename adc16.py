@@ -478,22 +478,14 @@ class ADC16():#katcp.RoachClient):
 
 			#check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True. 
 			#This is to make sure that the eye of the pattern is swept completely
-#			chan_counts_0 = np.array(self.test_tap(chip,0,'all'))
-#			chan_counts_31 = np.array(self.test_tap(chip,31,'all'))
-#			for i in range(len(chan_counts_0)):
-#				if chan_counts_0[i] ==0 or chan_counts_31[i] ==0:
-#					self.bitslip(self.chip_select)
-#					
-#					chan_counts_0 = np.array(self.test_tap(chip,0,'all'))
-#					chan_counts_31 = np.array(self.test_tap(chip,31,'all'))
-	#		for errors in chan_counts_0:
-	#			if errors ==0:
-	#				self.bitslip(self.chip_select)
-	#				break
-	#		for errors in chan_counts_1:
-	#			if errors ==0:
-	#				self.bitslip(self.chip_select)
-	#				break
+			chan_errors_0 = np.array(self.test_tap(chip,0,'all'))
+			chan_errors_31 = np.array(self.test_tap(chip,31,'all'))
+			while chan_errors_0[0]==0 or chan_errors_31[0]==0:
+				self.bitslip(self.chip_select)
+				chan_errors_0 = np.array(self.test_tap(chip,0,'all'))
+				chan_errors_31 = np.array(self.test_tap(chip,31,'all'))
+
+
 			#error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors  	
 			#of that lane  when compared to the expected value. read_ram method unpacks 1024 bytes. There are 8
 			#lanes so each lane gets 1024/8=128 read outs from a single call to read_ram method, like this, channel_1a etc. represent the errors in that channel
