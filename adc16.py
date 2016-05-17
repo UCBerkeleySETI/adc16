@@ -247,11 +247,11 @@ class ADC16():#katcp.RoachClient):
 
 	def set_demux_adc(self):
 		if self.demux_mode==1:
-			self.write_adc(0x31,0x0001) 
+			self.write_adc(0x31,0x0204) 
 		elif self.demux_mode==2:
 			self.write_adc(0x31,0x0102) 
 		elif self.demux_mode==4:
-			self.write_adc(0x31,0x0204)
+			self.write_adc(0x31,0x0001)
 		else:
 		 	logging.error('demux_mode variable not assigned. Weird.')
 			exit(1)
