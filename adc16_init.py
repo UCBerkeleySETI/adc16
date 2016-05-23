@@ -11,9 +11,11 @@ if __name__ == '__main__':
 	p.add_argument('-g', '--gain', dest = 'gain', type = int, default = 0, help = 'Set the gain')
 	p.add_argument('-i','--iters', dest = 'num_iters', type = int, default=1, help = 'Enter the number of snaps per tap')
 	p.add_argument('-r', '--reg', nargs = '+', dest = 'registers', type = int, default = [], help = 'enter registers and their values in [REGISTER] [VALUE] format')
-	p.add_argument('-c', '--chips', nargs = '+', dest = 'chips', type = list, default = ['a','b','c'], help = 'Input chips you wish to calibrate. Ex: -c a b . Default all chips:  a b c.')
+	p.add_argument('-c', '--chips', nargs = '+', dest = 'chips', type = str, default = ['a','b','c'], help = 'Input chips you wish to calibrate. Ex: -c a b . Default all chips:  a b c.')
 	p.add_argument('-s', '--skip', action = 'store_true', dest = 'skip_flag', help = 'specify this flag if you want to skip programming the bof file unto the FPGA')	
 	p.add_argument('-v', '--verbosity', action = 'store_true', dest = 'verbosity', help = 'increase output verbosity') #add the explanation of different demux modes
+	p.add_argument('-p', '--pattern', dest = 'test_pattern', type=str,default = 'deskew',help = 'input the test pattern to calibrate adc(ex. deskew:10101010, sync:11110000),for custom pattern just enter bitstream(ex.-p 10110110 or -p 0 etc.')
+	
 	args = p.parse_args()
 	demux_mode=args.demux_mode
 	gain = args.gain
@@ -24,9 +26,9 @@ if __name__ == '__main__':
 	skip_flag = args.skip_flag
 	verbosity = args.verbosity
 	chips = args.chips
-
+	test_pattern = args.test_pattern
 #define an ADC16 class object and pass it keyword arguments
-a=adc16.ADC16(**{'host':host, 'bof':bof, 'skip_flag':skip_flag, 'verbosity':verbosity, 'chips':chips,'demux_mode':demux_mode})
+a=adc16.ADC16(**{'host':host, 'bof':bof, 'skip_flag':skip_flag, 'verbosity':verbosity, 'chips':chips,'demux_mode':demux_mode,'test_pattern':test_pattern})
 
 
 
