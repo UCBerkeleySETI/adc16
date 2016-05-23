@@ -76,7 +76,8 @@ katcp_port=7147
 #   # C = ISERDES Bit Slip Chip C             #
 #   # B = ISERDES Bit Slip Chip B             #
 #   # A = ISERDES Bit Slip Chip A             #
-#   # T = Delay Tap                           #
+#   # T = Delay Tap
+#   # i = Bitslip specific channel(out of 8)  #
 #   # ======================================= #
 #   # |<-- MSb                       LSb -->| #
 #   # 0000 0000 0011 1111 1111 2222 2222 2233 #
@@ -84,7 +85,7 @@ katcp_port=7147
 #   # ---- -WMM ---- ---- ---- ---- ---- ---- #
 #   # ---- ---- ---R ---- ---- ---- ---- ---- #
 #   # ---- ---- ---- ---S ---- ---- ---- ---- #
-#   # ---- ---- ---- ---- HGFE DCBA ---- ---- #
+#   # ---- ---- ---- ---- HGFE DCBA iii- ---- #
 #   # ---- ---- ---- ---- ---- ---- ---T TTTT #
 #   # ======================================= #
 #   # NOTE: W enables writing the MM bits.    #
@@ -166,7 +167,7 @@ class ADC16():#katcp.RoachClient):
 			else:
 				logging.error('Invalid chip name passed, available values: a, b or c, default is all chips selected')
 				exit(1)
-		self.chip_select = self.chip_select_a + self.chip_select_b + self.chip_select_c
+		self.chip_select = self.chip_select_a | self.chip_select_b | self.chip_select_c
 
 			
 		#Instantiating a snap object with attributes of FpgaClient class
@@ -192,8 +193,7 @@ class ADC16():#katcp.RoachClient):
 	#ADC controller can only write to adc one bit at a time at rising clock edge
 	def write_adc(self,addr,data):
 		SCLK = 0x200
-	#	CS = self.chip_select
-		CS = 0xff
+		CS = self.chip_select
 		IDLE = SCLK
 		SDA_SHIFT = 8
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
@@ -361,10 +361,13 @@ class ADC16():#katcp.RoachClient):
 	#The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of A and B lanes, respectively.
 	#Refer to the memory map word 2 and word 3 for clarification. The memory map was made for a ROACH design so it has chips A-H. 
 	#SNAP 1 design has three chips
-	def bitslip(self,chip_num):
+	def bitslip(self,chip_num,channel):
+		chan_shift = 5
+		chan_select_bs = channel << chan_shift
 		state = 0
-		bitslip_shift = 8
-		state |= 1 << bitslip_shift + chip_num
+		chip_shift = 8
+		chip_select_bs = 1 << chip_shift + chip_num
+		state |= (chip_select_bs | chan_select_bs)
 		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
 		self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
 		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
@@ -435,7 +438,7 @@ class ADC16():#katcp.RoachClient):
 		if expected_str == 'deskew':
 			expected = 0x2a
 		elif expected_str == 'sync':
-			expected = 0xf0
+			expected = 0x70
 		elif expected_str == 'custom':
 			expected = int(expected_str,2)
 		else:
@@ -497,6 +500,8 @@ class ADC16():#katcp.RoachClient):
 		for chip,chip_num in self.chips.iteritems():
 			logging.info('Callibrating chip %s...'%chip)	
 			logging.info('Setting deskew pattern...')
+			print('Stuff in chip %s before enabling pattern'%chip)
+			print(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
 			expected=self.test_pattern
 			self.enable_pattern(expected)
 			print('Stuff in chip after enabling test mode\n')
@@ -515,7 +520,14 @@ class ADC16():#katcp.RoachClient):
 #				tap_0_errors = np.equal(tap_errors[0],0)
 #		#		tap_31_errors = np.equal(tap_errors[31],0)
 #				print(tap_0_errors)
-		
+			for i in range(8):
+				print('Bitslipping chan %i' %i)
+				while tap_0_errors[i]:
+					print('tap_0_errrors:',tap_0_errors)
+					self.bitslip(chip_num,i)
+					tap_errors=self.test_tap(chip,expected)
+					tap_0_errors = np.equal(tap_errors[0],0)
+						
 #			if tap_0_errors.any():
 #				self.bitslip(chip_num)
 #				tap_errors = self.test_tap(chip,expected)
@@ -532,6 +544,9 @@ class ADC16():#katcp.RoachClient):
 #				pprint(tap_0_errors)	
 #				pprint(tap_errors)
 #				t+=1
+
+
+
 			#error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors  	
 			#of that lane  when compared to the expected value. read_ram method unpacks 1024 bytes. There are 8
 			#lanes so each lane gets 1024/8=128 read outs from a single call to read_ram method, like this, channel_1a etc. represent the errors in that channel
@@ -543,6 +558,7 @@ class ADC16():#katcp.RoachClient):
 			good_tap_range = []	
 			best_tap_range = []
 			print('Printing the list of errors, each row is a tap\n')
+			pprint(['chan1a','chan1b','chan2a','chan2b','chan3a','chan3b','chan4a','chan4b'])
 			pprint(error_list)
 			min_tap=[]
 			max_tap=[]
@@ -558,8 +574,9 @@ class ADC16():#katcp.RoachClient):
 						good_tap_range[i].append(j)
 		#	find the min and max of each element of good tap range and call delay tap 
 			logging.info('Printing good tap values for each channel...each row corresponds to different channel')
+				
 			for i in range(len(good_tap_range)):
-				print(good_tap_range[i])
+				print('Channel {0}: {1}'.format(i+1,good_tap_range[i]))
 
 			channels = ['1a','1b','2a','2b','3a','3b','4a','4b']
 			for k in range(8):
