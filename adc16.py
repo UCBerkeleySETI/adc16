@@ -148,7 +148,6 @@ class ADC16():#katcp.RoachClient):
 		self.test_pattern = kwargs['test_pattern']	
 		self.demux_mode = kwargs['demux_mode']		
 
-	
 		#create a chip dictionary to facilitate writing to adc16_controller	
 		self.chips = {}
 		self.chip_select_a = 0
@@ -168,8 +167,20 @@ class ADC16():#katcp.RoachClient):
 				logging.error('Invalid chip name passed, available values: a, b or c, default is all chips selected')
 				exit(1)
 		self.chip_select = self.chip_select_a | self.chip_select_b | self.chip_select_c
-
-			
+		print('Chips select:',bin(self.chip_select))
+		#Creating an expected pattern dictionary. Used in test_taps and enable_pattern
+		if self.test_pattern == 'deskew':
+			self.expected = 0x2a;
+		elif self.test_pattern  == 'sync':
+			self.expected = 0x70;
+		elif self.test_pattern == 'ramp':
+			self.expected = 'ramp'
+		else:
+			if len(self.test_pattern) <= 8:
+				self.expected = int(self.test_pattern,2)
+			else:
+				print('Not an acceptable test pattern. Check out -h at the terminal')
+				exit(1) 
 		#Instantiating a snap object with attributes of FpgaClient class
 		print('Connecting to SNAP.....')
 		self.snap = corr.katcp_wrapper.FpgaClient(kwargs['host'], self.katcp_port, timeout=10)
@@ -203,20 +214,24 @@ class ADC16():#katcp.RoachClient):
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing address state written to adc16_controller, offset=0, clock low")
 			logging.debug(np.binary_repr(state,width=32))
+			print(np.binary_repr(state,width=32))
 			state = (addr_bit<<SDA_SHIFT) | CS | SCLK
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing address state written to adc16_controller, offset=0, clock high")
 			logging.debug(np.binary_repr(state,width=32))
+			print(np.binary_repr(state,width=32))
 		for j in range(16):
 			data_bit = (data>>(16-j-1))&1
 			state = (data_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing data state written to adc16_controller, offset=0, clock low")
 			logging.debug(np.binary_repr(state,width=32))
+			print(np.binary_repr(state,width=32))
 			state =( data_bit<<SDA_SHIFT) | CS | SCLK	
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)		
 			logging.debug("Printing data address state written to adc16_controller, offset=0, clock high")
 			logging.debug(np.binary_repr(state,width=32))
+			print(np.binary_repr(state,width=32))
 		
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
 
@@ -306,18 +321,16 @@ class ADC16():#katcp.RoachClient):
 	def enable_pattern(self,pattern):                                                                                           
 		self.write_adc(0x25,0x00)
 		self.write_adc(0x45,0x00)
-                if pattern=='ramp':
+                if pattern =='ramp':
                         self.write_adc(0x25,0x0040)
-                elif pattern=='deskew':
+                elif pattern == 0x2a:
                         self.write_adc(0x45,0x0001)
-                elif pattern=='sync':
+                elif pattern == 0x70:
                         self.write_adc(0x45,0x0002)
-		elif pattern=='custom':
-			self.write_adc(0x26,0xff00)
-                else:
-                        logging.error('Pattern specified not found, possible options: ramp, deskew and sync')
-                        exit(1)
-
+		else:
+			self.write_adc(0x25,0x10)
+			self.write_adc(0x26,(self.expected)<<8)
+		time.sleep(1)
 
 	def read_ram(self,device):
 		SNAP_REQ = 0x00010000
@@ -386,12 +399,14 @@ class ADC16():#katcp.RoachClient):
 			#Set tap bits
 			self.snap.write_int('adc16_controller', delay_tap_mask & tap , offset = 1,blindwrite=True)
 			#Set strobe bits
-			self.snap.write_int('adc16_controller', 0xfff, offset = 2,blindwrite=True)
-			self.snap.write_int('adc16_controller', 0xfff, offset = 3,blindwrite=True)
+			self.snap.write_int('adc16_controller', 0xffffffff, offset = 2,blindwrite=True)
+			self.snap.write_int('adc16_controller', 0xffffffff, offset = 3,blindwrite=True)
 			#Clear all bits
 			self.snap.write_int('adc16_controller', 0 , offset = 1,blindwrite=True)
 			self.snap.write_int('adc16_controller', 0 , offset = 2,blindwrite=True)
 			self.snap.write_int('adc16_controller', 0 , offset = 3,blindwrite=True)
+			#Note this return statement, after all channels have been bitslip it'll exit out of the function. 
+			#the function is called again after figuring out the best tap with a single channel argument. 
 			return
 		elif channel == '1a':
 			chan_select = 0x111
@@ -434,16 +449,7 @@ class ADC16():#katcp.RoachClient):
 	
 
 	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-	def test_tap(self,chip,expected_str):
-		if expected_str == 'deskew':
-			expected = 0x2a
-		elif expected_str == 'sync':
-			expected = 0x70
-		elif expected_str == 'custom':
-			expected = int(expected_str,2)
-		else:
-			print('Improper test pattern, consult -h at the terminal')
-			exit(1)
+	def test_tap(self,chip):
 			
 				
 		error_count=[]
@@ -474,22 +480,22 @@ class ADC16():#katcp.RoachClient):
 		
 			i=0
 			while i < 1024:
-				if data[i] != expected:
+				if data[i] != self.expected:
 					chan1a_error += 1
-				if data[i+1] != expected:
+				if data[i+1] != self.expected:
 					chan1b_error += 1
-				if data[i+2] != expected:
+				if data[i+2] != self.expected:
 					chan2a_error += 1
-				if data[i+3] != expected:
+				if data[i+3] != self.expected:
 					chan2b_error += 1
-				if data[i+4] != expected:
+				if data[i+4] != self.expected:
 					chan3a_error += 1
 
-				if data[i+5] != expected:
+				if data[i+5] != self.expected:
 					chan3b_error += 1
-				if data[i+6] != expected:
+				if data[i+6] != self.expected:
 					chan4a_error += 1
-				if data[i+7] != expected:
+				if data[i+7] != self.expected:
 					chan4b_error += 1
 				i += 8
 
@@ -502,49 +508,26 @@ class ADC16():#katcp.RoachClient):
 			logging.info('Setting deskew pattern...')
 			print('Stuff in chip %s before enabling pattern'%chip)
 			print(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
-			expected=self.test_pattern
-			self.enable_pattern(expected)
+			
+			self.enable_pattern(self.expected)
 			print('Stuff in chip after enabling test mode\n')
 			print(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
 			#check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True. 
 			#This is to make sure that the eye of the pattern is swept completely
 			
-			tap_errors = self.test_tap(chip,expected)
+			tap_errors = self.test_tap(chip)
 			logging.debug('before bitslip\n')
 			logging.debug(tap_errors)	
 			tap_0_errors = np.equal(tap_errors[0],0)
 
-#			while tap_0_errors.any():
-#				self.bitslip(self.chip_select)
-#				tap_errors = self.test_tap(chip,expected)
-#				tap_0_errors = np.equal(tap_errors[0],0)
-#		#		tap_31_errors = np.equal(tap_errors[31],0)
-#				print(tap_0_errors)
-			for i in range(8):
-				print('Bitslipping chan %i' %i)
-				while tap_0_errors[i]:
-					print('tap_0_errrors:',tap_0_errors)
-					self.bitslip(chip_num,i)
-					tap_errors=self.test_tap(chip,expected)
-					tap_0_errors = np.equal(tap_errors[0],0)
+#			for i in range(8):
+#				print('Bitslipping chan %i' %i)
+#				while tap_0_errors[i]:
+#					print('tap_0_errrors:',tap_0_errors)
+#					self.bitslip(chip_num,i)
+#					tap_errors=self.test_tap(chip)
+#					tap_0_errors = np.equal(tap_errors[0],0)
 						
-#			if tap_0_errors.any():
-#				self.bitslip(chip_num)
-#				tap_errors = self.test_tap(chip,expected)
-#				tap_0_errors = np.equal(tap_errors[0],0)
-#				logging.debug('after bitslip /n')
-#				logging.debug(tap_0_errors)	
-#				logging.debug(tap_errors)
-#			t=0
-#			while t<5:
-#				self.bitslip(chip_num)
-#				tap_errors = self.test_tap(chip,expected)
-#				tap_0_errors = np.equal(tap_errors[0],0)
-#				print('after bitslip\n')
-#				pprint(tap_0_errors)	
-#				pprint(tap_errors)
-#				t+=1
-
 
 
 			#error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors  	
@@ -554,7 +537,7 @@ class ADC16():#katcp.RoachClient):
 			# tap 1: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
 			# .....: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
 			# tap 31:[ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
-			error_list = self.test_tap(chip,expected)
+			error_list = self.test_tap(chip)
 			good_tap_range = []	
 			best_tap_range = []
 			print('Printing the list of errors, each row is a tap\n')
@@ -590,8 +573,9 @@ class ADC16():#katcp.RoachClient):
 			pprint(self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip])))
 
 
-
 	def sync_chips(self):
+			
+		#channels = {0:'1a',1:'1b',2:'2a',3:'2b',4:'3a',5:'3b',6:'4a',7:'4b'}
 		self.enable_pattern('sync')
 		self.sync_expected = 0x70
 		 			
@@ -600,9 +584,9 @@ class ADC16():#katcp.RoachClient):
 			snapshot = self.read_ram('adc16_wb_ram%i' %value)
 			logging.info('Printing the sync pattern snapshot\n')
 			pprint(snapshot)
-			if snapshot[0] != self.sync_expected:
-				self.bitslip(value)
-			#	snapshot = self.read_ram('adc16_wb_ram%i' %value)
+			for lane in range(8):
+				while snapshot[0] != self.sync_expected:
+					self.bitslip(value,lane)
 			
 	def clock_locked(self):
 		if self.snap.est_brd_clk():
