@@ -214,24 +214,24 @@ class ADC16():#katcp.RoachClient):
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing address state written to adc16_controller, offset=0, clock low")
 			logging.debug(np.binary_repr(state,width=32))
-			print(np.binary_repr(state,width=32))
+	#		print(np.binary_repr(state,width=32))
 			state = (addr_bit<<SDA_SHIFT) | CS | SCLK
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing address state written to adc16_controller, offset=0, clock high")
 			logging.debug(np.binary_repr(state,width=32))
-			print(np.binary_repr(state,width=32))
+	#		print(np.binary_repr(state,width=32))
 		for j in range(16):
 			data_bit = (data>>(16-j-1))&1
 			state = (data_bit<<SDA_SHIFT) | CS
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)
 			logging.debug("Printing data state written to adc16_controller, offset=0, clock low")
 			logging.debug(np.binary_repr(state,width=32))
-			print(np.binary_repr(state,width=32))
+	#		print(np.binary_repr(state,width=32))
 			state =( data_bit<<SDA_SHIFT) | CS | SCLK	
 			self.snap.write_int('adc16_controller',state,offset=0,blindwrite=True)		
 			logging.debug("Printing data address state written to adc16_controller, offset=0, clock high")
 			logging.debug(np.binary_repr(state,width=32))
-			print(np.binary_repr(state,width=32))
+	#		print(np.binary_repr(state,width=32))
 		
 		self.snap.write_int('adc16_controller',IDLE,offset=0,blindwrite=True)
 
@@ -272,11 +272,18 @@ class ADC16():#katcp.RoachClient):
 
 	def set_demux_adc(self):
 		if self.demux_mode==1:
-			self.write_adc(0x31,0x0204) 
+			self.write_adc(0x31,0x04) 
+			#clock dividing register set to 1 (demux 1 means four signals going in)
+			self.write_adc(0x31,0x000)
+
 		elif self.demux_mode==2:
-			self.write_adc(0x31,0x0102) 
+			self.write_adc(0x31,0x02) 
+			#clock dividing register set to 2
+			self.write_adc(0x31,0x100)
 		elif self.demux_mode==4:
-			self.write_adc(0x31,0x0001)
+			self.write_adc(0x31,0x01)
+			#clock dividing register set to 4 (1GHz clock get's divided by 4 and fed to the 4 channels at 250MHz)
+			self.write_adc(0x31,0x200)
 		else:
 		 	logging.error('demux_mode variable not assigned. Weird.')
 			exit(1)
@@ -585,12 +592,14 @@ class ADC16():#katcp.RoachClient):
 			logging.info('Printing the sync pattern snapshot\n')
 			pprint(snapshot)
 			for lane in range(8):
-				while snapshot[0] != self.sync_expected:
+				if snapshot[lane] != self.sync_expected:
 					self.bitslip(value,lane)
 			
 	def clock_locked(self):
-		if self.snap.est_brd_clk():
+		locked_bit = self.snap.read_int('adc16_controller',offset=0) >> 24
+		if locked_bit & 3:
 			logging.info('ADC clock is locked!!!')
+			print(self.snap.est_brd_clk())
 		else:
 			logging.warning('ADC clock not locked, check your clock source/correctly set demux mode')
 			logging.warning('Exiting...')
