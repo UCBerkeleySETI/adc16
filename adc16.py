@@ -275,18 +275,24 @@ class ADC16():#katcp.RoachClient):
 			self.write_adc(0x31,0x04) 
 			#clock dividing register set to 1 (demux 1 means four signals going in)
 			self.write_adc(0x31,0x000)
-
+			
 		elif self.demux_mode==2:
 			self.write_adc(0x31,0x02) 
 			#clock dividing register set to 2
 			self.write_adc(0x31,0x100)
+			print('Route signals into input 1 and input 3 of the selected ADC chip')
+			#Selecting input 1
+			#Selecting input 3
 		elif self.demux_mode==4:
 			self.write_adc(0x31,0x01)
 			#clock dividing register set to 4 (1GHz clock get's divided by 4 and fed to the 4 channels at 250MHz)
 			self.write_adc(0x31,0x200)
+			print('Route signal into input 1 of the selected ADC chip')
+			#Selecting input 1
 		else:
 		 	logging.error('demux_mode variable not assigned. Weird.')
 			exit(1)
+	#There are two different 
 	def set_demux_fpga(self):
 		demux_shift = 24
                 if self.demux_mode==1:
@@ -310,6 +316,10 @@ class ADC16():#katcp.RoachClient):
                 else:
 			print('Design is not ADC16-based')
 			exit(1)
+
+
+
+
 
 # Selects a test pattern or sampled data for all ADCs selected by
   # +chip_select+.  +ptn+ can be any of:
@@ -386,8 +396,10 @@ class ADC16():#katcp.RoachClient):
 		chan_select_bs = channel << chan_shift
 		state = 0
 		chip_shift = 8
-		chip_select_bs = 1 << chip_shift + chip_num
+		#chip_select_bs = 1 << chip_shift + chip_num
+		chip_select_bs = (2**8-1)<<8
 		state |= (chip_select_bs | chan_select_bs)
+	#	print('Bitslip state written to offset=1:',bin(state))
 		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
 		self.snap.write_int('adc16_controller', state, offset=1, blindwrite=True)
 		self.snap.write_int('adc16_controller', 0, offset=1, blindwrite=True)
@@ -456,22 +468,62 @@ class ADC16():#katcp.RoachClient):
 	
 
 	#returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-	def test_tap(self,chip):
+	#taps argument can have a value of an int or a string. If it's a string then it will iterate through all 32 taps 
+	#if it's an int it will only delay all channels by that particular tap value.
+	def test_tap(self,chip,taps):
+		if taps  == 'all':			
 			
+			error_count=[]
+			#read_ram reuturns an array of data form a sanpshot from ADC output
+			for tap in range(32):	
 				
-		error_count=[]
-		#read_ram reuturns an array of data form a sanpshot from ADC output
-		for tap in range(32):	
+				self.delay_tap(tap,'all')
+				data = self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip]))
+				#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
+
+				chan1a_error = 0
+				chan1b_error = 0
+				chan2a_error = 0
+				chan2b_error = 0
+				chan3a_error = 0
+				chan3b_error = 0
+				chan4a_error = 0
+				chan4b_error = 0
 			
-			self.delay_tap(tap,'all')
+			
+			
+			
+				i=0
+				while i < 1024:
+					if data[i] != self.expected:
+						chan1a_error += 1
+					if data[i+1] != self.expected:
+						chan1b_error += 1
+					if data[i+2] != self.expected:
+						chan2a_error += 1
+					if data[i+3] != self.expected:
+						chan2b_error += 1
+					if data[i+4] != self.expected:
+						chan3a_error += 1
+
+					if data[i+5] != self.expected:
+						chan3b_error += 1
+					if data[i+6] != self.expected:
+						chan4a_error += 1
+					if data[i+7] != self.expected:
+						chan4b_error += 1
+					i += 8
+
+				error_count.append([chan1a_error,chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
+			return(error_count)
+		else:
+
+			error_count=[]
+			#read_ram reuturns an array of data form a sanpshot from ADC output
+				
+			self.delay_tap(taps,'all')
 			data = self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip]))
 			#each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
-	#		data[data<0] += 128	
-	#		print('Printing data from test_tap method..tap%i\n'%tap)
-	#		for b in data:
-	#			print(bin(b))
-
-	#		print(bin(data))
 
 			chan1a_error = 0
 			chan1b_error = 0
@@ -507,8 +559,8 @@ class ADC16():#katcp.RoachClient):
 				i += 8
 
 			error_count.append([chan1a_error,chan1b_error, chan2a_error, chan2b_error, chan3a_error, chan3b_error, chan4a_error, chan4b_error])
-		return(error_count)
-
+			print('Error count for {0} tap: {1}'.format(taps,error_count))
+			return(error_count)
 	def walk_taps(self):
 		for chip,chip_num in self.chips.iteritems():
 			logging.info('Callibrating chip %s...'%chip)	
@@ -521,20 +573,27 @@ class ADC16():#katcp.RoachClient):
 			print(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
 			#check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True. 
 			#This is to make sure that the eye of the pattern is swept completely
-			
-			tap_errors = self.test_tap(chip)
-			logging.debug('before bitslip\n')
-			logging.debug(tap_errors)	
-			tap_0_errors = np.equal(tap_errors[0],0)
-
+#			error_counts_0 = self.test_tap(chip,0)
+#			error_counts_31 = self.test_tap(chip,31)
+#
 #			for i in range(8):
 #				print('Bitslipping chan %i' %i)
-#				while tap_0_errors[i]:
-#					print('tap_0_errrors:',tap_0_errors)
+#				while not(error_counts_0[0][i]):^ and not(error_counts_31[0][i]): 
 #					self.bitslip(chip_num,i)
-#					tap_errors=self.test_tap(chip)
-#					tap_0_errors = np.equal(tap_errors[0],0)
+#					error_counts_0 = self.test_tap(chip,0)
+#					error_counts_31 = self.test_tap(chip,31)
 						
+#			for i in range(8):
+#				
+#				error_counts = self.test_tap(chip,'all')
+#				print('Before bitslip of chan {0}'.format(i))
+#				pprint(error_counts)
+#				for j in range(8):
+#
+#					self.bitslip(chip_num,i)
+#				error_counts = self.test_tap(chip,'all')
+#				print('After bitslip of chan {0}'.format(i))
+#				pprint(error_counts)
 
 
 			#error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors  	
@@ -544,7 +603,7 @@ class ADC16():#katcp.RoachClient):
 			# tap 1: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
 			# .....: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
 			# tap 31:[ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
-			error_list = self.test_tap(chip)
+			error_list = self.test_tap(chip,'all')
 			good_tap_range = []	
 			best_tap_range = []
 			print('Printing the list of errors, each row is a tap\n')
@@ -580,6 +639,19 @@ class ADC16():#katcp.RoachClient):
 			pprint(self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip])))
 
 
+
+
+#			BITSLIP
+#			self.enable_pattern('sync')
+#			snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
+#			print('Snapshot before bitslipping:\n')
+#			pprint(snap)
+#			for i in range(8):
+#				self.bitslip(chip_num,i)
+#				snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
+#				print('Snapshot after bitslipping:\n')
+#				pprint(snap)
+			
 	def sync_chips(self):
 			
 		#channels = {0:'1a',1:'1b',2:'2a',3:'2b',4:'3a',5:'3b',6:'4a',7:'4b'}
@@ -602,8 +674,6 @@ class ADC16():#katcp.RoachClient):
 			print(self.snap.est_brd_clk())
 		else:
 			logging.warning('ADC clock not locked, check your clock source/correctly set demux mode')
-			logging.warning('Exiting...')
-			exit(1)
 	def calibrate(self):
 		self.adc_initialize()
 		#check if clock is locked
