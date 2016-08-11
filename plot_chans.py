@@ -29,7 +29,7 @@ if __name__ == '__main__':
 	chips = args.chips
 	test_pattern = args.test_pattern
 #define an ADC16 class object and pass it keyword arguments
-a=adc16.ADC16(**{'host':host, 'bof':bof, 'skip_flag':skip_flag, 'verbosity':verbosity, 'chips':chips,'demux_mode':demux_mode,'test_pattern':test_pattern})
+a=adc16.ADC16(**{'host':host, 'bof':bof, 'skip_flag':skip_flag, 'verbosity':verbosity, 'chips':chips,'demux_mode':demux_mode,'test_pattern':test_pattern,'gain':gain})
 
 chip_dict={}
 for chip in chips:
@@ -104,19 +104,19 @@ for chip, chip_num in chip_dict.iteritems():
 			
 			i+=4
 		plt.subplot(5,3,4+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input1_data)
 		plt.title('Input 1 data')
 		plt.subplot(5,3,7+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input2_data)
 		plt.title('Input 2 data')
 		plt.subplot(5,3,10+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input3_data)
 		plt.title('Input 3 data')
 		plt.subplot(5,3,13+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input4_data)
 		plt.title('Input 4 data')
 	elif demux_mode == 4:
