@@ -270,25 +270,24 @@ class ADC16():#katcp.RoachClient):
 
 	def set_demux_adc(self):
 		if self.demux_mode==1:
+			#Setting number of channes to 4 and clock dividing factor to 1
 			self.write_adc(0x31,0x04) 
-			#clock dividing register set to 1 (demux 1 means four signals going in)
-			self.write_adc(0x31,0x000)
 			#Route inputs to respective ADC's for demux 1
 			print('Routing all four inputs to corresponding ADC channels')
 			self.write_adc(0x3a,0x0402)
 			self.write_adc(0x3b,0x1008)	
 		elif self.demux_mode==2:
+			#Setting the number of channels and clock dividing factor to 2
 			self.write_adc(0x31,0x02) 
-			#clock dividing register set to 2
-			self.write_adc(0x31,0x100)
 			#Routing input 1 and input 3 to ADC for interleaving
-			print('Setting ADC to interleave inputs 1 and 3 starting from the rightmost ADC SMA on SNAP')
+			print('Setting ADC to interleave inputs 1 (ADC0) and 3 (ADC2)')
 			#Selecting input 1
 			self.write_adc(0x3a,0x0202)
 			#Selecting input 3
 			self.write_adc(0x3b,0x0808)
 		elif self.demux_mode==4:
-			self.write_adc(0x31,0x200)
+			#Setting the number of channels to 1 and clock dividing factor to 4
+			self.write_adc(0x31,0x01)
 			print('Setting ADC to interleave input (ADC0)')
 			#Selecting input 1
 			self.write_adc(0x3a,0x0202)
@@ -306,6 +305,7 @@ class ADC16():#katcp.RoachClient):
 			#writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2 as seen in the adc16_controller memory map)
 			state = (4+1) << demux_shift
 			self.snap.write_int('adc16_controller', state, offset = 1, blindwrite = True)
+			
                 elif fpga_demux==4:
 			state = (4+2) << demux_shift
 			self.snap.write_int('adc16_controller', state, offset = 1, blindwrite = True)
