@@ -78,11 +78,11 @@ for chip, chip_num in chip_dict.iteritems():
 			input3_data.append(snapshot[i+7])
 			i+=8
 		plt.subplot(3,3,4+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input1_data)
 		plt.title('Input 1 data chip %s'%chip)
 		plt.subplot(3,3,7+chip_num)
-		plt.ylim([-6,6])
+		plt.ylim([-40,40])
 		plt.plot(input3_data)
 		plt.title('Input 3 data chip %s'%chip)
 
