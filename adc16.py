@@ -100,9 +100,9 @@ katcp_port=7147
 #   #       00: demux by 1 (single channel)   #
 #   # ======================================= #
 #   # NOTE: MM selects the demux mode.        #
-#   #       00: demux by 1 (single channel)   #
+#   #       00: demux by 1 (quad channel)     #
 #   #       01: demux by 2 (dual channel)     #
-#   #       10: demux by 4 (quad channel)     #
+#   #       10: demux by 4 (single channel)   #
 #   #       11: undefined                     #
 #   #       ADC board.  A '1' bit means       #
 #   #       locked (good!).  Bit 5 is always  #
@@ -270,14 +270,14 @@ class ADC16():#katcp.RoachClient):
 
 	def set_demux_adc(self):
 		if self.demux_mode==1:
-			#Setting number of channes to 4 and clock dividing factor to 1
+			#Setting number of channes to 4
 			self.write_adc(0x31,0x04) 
 			#Route inputs to respective ADC's for demux 1
 			print('Routing all four inputs to corresponding ADC channels')
 			self.write_adc(0x3a,0x0402)
 			self.write_adc(0x3b,0x1008)	
 		elif self.demux_mode==2:
-			#Setting the number of channels and clock dividing factor to 2
+			#Setting number of channels to 2
 			self.write_adc(0x31,0x02) 
 			#Routing input 1 and input 3 to ADC for interleaving
 			print('Setting ADC to interleave inputs 1 (ADC0) and 3 (ADC2)')
@@ -286,7 +286,7 @@ class ADC16():#katcp.RoachClient):
 			#Selecting input 3
 			self.write_adc(0x3b,0x0808)
 		elif self.demux_mode==4:
-			#Setting the number of channels to 1 and clock dividing factor to 4
+			#Setting the number of channels to 1
 			self.write_adc(0x31,0x01)
 			print('Setting ADC to interleave input (ADC0)')
 			#Selecting input 1
@@ -297,7 +297,9 @@ class ADC16():#katcp.RoachClient):
 			exit(1)
 	#There are two different 
 	def set_demux_fpga(self,fpga_demux):
+		#Setting fpga demux rearranges the bits before they're output from the adc block depending on the adc demux mode used. 
 		demux_shift = 24
+		#state is assigned according to the adc16_controller memory map. (4+n) shifted by the amount of bits that precede the WMM field. 4 always activates the W bit to allow writing to the MM bits and n is determined by the adc demux mode used  
                 if fpga_demux==1:
 			state = (4+0) << demux_shift
 			self.snap.write_int('adc16_controller', state, offset = 1, blindwrite = True)
