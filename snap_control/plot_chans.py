@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     for chip, chip_num in chip_dict.iteritems():
 
-        # calibrate the snap_board chips using test patterns
+        # calibrate the snap_control chips using test patterns
         # a.set_demux_fpga(1)
         snapshot = a.read_ram('adc16_wb_ram{0}'.format(chip_num))
         #    for i in snapshot:
