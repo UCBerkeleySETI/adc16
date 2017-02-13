@@ -10,15 +10,15 @@ version = '1.0.0'
 # see http://astropy.readthedocs.org/en/latest/development/scripts.html
 entry_points = {
     'console_scripts' :
-        ['adc16_init = adc16.adc16_init:cmd_tool',
+        ['snap_init = snap_board.snap_init:cmd_tool',
      ]
     }
 
-setup(name='adc16',
+setup(name='snap_board',
       version=version,
       description='HMCAD1511 ADC chip calibration module',
       install_requires=['numpy', 'corr'],
-      url='https://github.com/ucberkeleyseti/adc16',
+      url='https://github.com/ucberkeleyseti/snap_board',
       author='Zuhra Abdurashidova and friends',
       entry_points=entry_points,
       packages=find_packages(),

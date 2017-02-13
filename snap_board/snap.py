@@ -138,7 +138,7 @@ katcp_port = 7147
 
 class SnapBoard(corr.katcp_wrapper.FpgaClient):
     """
-    Construct an adc16 instance. allowed kwargs are
+    Construct an snap_board instance. allowed kwargs are
 
     hostname
     katcp_port
