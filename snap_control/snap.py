@@ -164,6 +164,13 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         self.chip_select   = None
 
 
+    def adc16_based(self):
+        """ Check if design uses ADC16 chip """
+        if 'adc16_controller' in self.listdev():
+            return True
+        else:
+            return False
+
     def set_chip_select(self, chips):
         """ Setup which chips will be used in the programmed design
 
@@ -191,7 +198,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
                 exit(1)
         self.chip_select = chip_select_a | chip_select_b | chip_select_c
 
-    def program(self, boffile, gain=1, demux_mode=1, chips=['a', 'b', 'c']): 
+    def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
         """ Reprogram the FPGA with a given boffile AND calibrates
 
         Adds gain, demux_mode and chips params to katcp_wrapper's progdev
@@ -338,13 +345,6 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             exit(1)
 
 
-    def adc16_based(self):
-        """ Check if design uses ADC16 chip """
-        if 'adc16_controller' in self.listdev():
-            print('Design is ADC16-based')
-        else:
-            print('Design is not ADC16-based')
-            exit(1)
 
 
 
@@ -714,16 +714,19 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
     def calibrate(self):
         """" Run calibration routines """
-        self.adc_initialize()
-        # check if clock is locked
-        self.clock_locked()
-        # check if design is ADC16 based
-        self.adc16_based()
-        # Setting gain value, default is 1
-        self.set_gain()
-        # Calibrate ADC by going through various tap values
-        self.walk_taps()
-        # Clear pattern setting registers so real data could be taken
-        self.clear_pattern()
-        print('Setting fpga demux to %i' % self.demux_mode)
-        self.set_demux_fpga(self.demux_mode)
+        if self.adc16_based():
+            self.adc_initialize()
+            # check if clock is locked
+            self.clock_locked()
+            # check if design is ADC16 based
+
+            # Setting gain value, default is 1
+            self.set_gain()
+            # Calibrate ADC by going through various tap values
+            self.walk_taps()
+            # Clear pattern setting registers so real data could be taken
+            self.clear_pattern()
+            print('Setting fpga demux to %i' % self.demux_mode)
+            self.set_demux_fpga(self.demux_mode)
+        else:
+            raise RuntimeError("Design is not ADC16 based, cannot calibrate.")
