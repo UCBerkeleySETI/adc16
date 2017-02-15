@@ -157,45 +157,59 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         else:
             logging.basicConfig(level=logging.INFO)
 
-    def program(self, boffile, gain=1, demux_mode=1, chips=['a', 'b', 'c']): 
-        """ Reprogram the FPGA with a given boffile 
-        
-        Notes: Overrides katcp_wrapper's progdev
-        """
-        # Make a dictionary out of chips specified on command line.
-        # mapping chip letters to numbers to facilitate writing to adc16_controller
-        self.demux_mode   = demux_mode
-        self.gain         = gain
         # create a chip dictionary to facilitate writing to adc16_controller
         self.chips = {}
-        self.chip_select_a = 0
-        self.chip_select_b = 0
-        self.chip_select_c = 0
+        self.demux_mode    = None
+        self.gain          = None
+        self.chip_select   = None
+
+
+    def set_chip_select(self, chips):
+        """ Setup which chips will be used in the programmed design
+
+        update chip dictionary to facilitate writing to adc16_controller
+
+        Args:
+            chips (list): list of chips, ['a', 'b', 'c']
+        """
+        chip_select_a = 0
+        chip_select_b = 0
+        chip_select_c = 0
         for chip in chips:
-            if chip.lower() == 'a':
+            chip = chip.lower()
+            if chip == 'a':
                 self.chips['a'] = 0
-                self.chip_select_a = 1 << self.chips['a']
-            elif chip.lower() == 'b':
+                chip_select_a = 1 << self.chips['a']
+            elif chip == 'b':
                 self.chips['b'] = 1
-                self.chip_select_b = 1 << self.chips['b']
-            elif chip.lower() == 'c':
+                chip_select_b = 1 << self.chips['b']
+            elif chip == 'c':
                 self.chips['c'] = 2
-                self.chip_select_c = 1 << self.chips['c']
+                chip_select_c = 1 << self.chips['c']
             else:
                 logging.error('Invalid chip name passed, available values: a, b or c, default is all chips selected')
                 exit(1)
-        self.chip_select = self.chip_select_a | self.chip_select_b | self.chip_select_c
-        print('Chips select:', bin(self.chip_select))
+        self.chip_select = chip_select_a | chip_select_b | chip_select_c
 
-        # Instantiating a snap object with attributes of FpgaClient class
+    def program(self, boffile, gain=1, demux_mode=1, chips=['a', 'b', 'c']): 
+        """ Reprogram the FPGA with a given boffile AND calibrates
 
-        if self.is_connected():
-            print('Connected to SNAP!')
-        else:
-            logging.error('Couldn\'t connect to SNAP, check your connection..')
-            exit(1)
+        Adds gain, demux_mode and chips params to katcp_wrapper's progdev
+
+        Args:
+            boffile (str): Name of boffile to program
+            gain (int): ADC gain, from 1-32 (1, 2, 4, 8 recommended)
+
+        """
+        # Make a dictionary out of chips specified on command line.
+        # mapping chip letters to numbers to facilitate writing to adc16_controller
         self.progdev(boffile)
-        self.calibrate()
+
+        if self.adc16_based():
+            self.set_demux_adc(demux_mode)
+            self.gain         = gain
+            self.set_chip_select(chips)
+            self.calibrate()
 
     def write_adc(self, addr, data):
         """
@@ -255,7 +269,17 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         # power adc up
         self.write_adc(0x0f, 0x0000)
 
-    def set_demux_adc(self):
+    def set_demux_adc(self, demux_mode):
+        """ Set demux factor for ADC mode
+
+        Interleave all inputs: demux=4
+        No interleaving: demux=1
+        Interleaving ADC0 and ADC2: demux=2
+
+        Args:
+            demux_mode (int): Set demulitplexing to 1 (no interleave), 2 or 4 (interleave all)
+        """
+        self.demux_mode = demux_mode
         if self.demux_mode == 1:
             # Setting number of channes to 4
             self.write_adc(0x31, 0x04)
@@ -284,16 +308,25 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             exit(1)
 
 
-    # There are two different
     def set_demux_fpga(self, fpga_demux):
-        # Setting fpga demux rearranges the bits before they're output from the adc block depending on the adc demux mode used.
+        """ Set demux on FPGA
+
+        Notes:
+            Setting fpga demux rearranges the bits before they're output from the adc block depending on
+            the adc demux mode used.
+            State is assigned according to the adc16_controller memory map. (4+n) shifted by the amount of bits
+            that precede the WMM field.
+            4 always activates the W bit to allow writing to the MM bits and n is determined by the adc demux mode used
+        """
+
         demux_shift = 24
-        # state is assigned according to the adc16_controller memory map. (4+n) shifted by the amount of bits that precede the WMM field. 4 always activates the W bit to allow writing to the MM bits and n is determined by the adc demux mode used
+
         if fpga_demux == 1:
             state = (4 + 0) << demux_shift
             self.write_int('adc16_controller', state, offset=1, blindwrite=True)
         elif fpga_demux == 2:
-            # writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2 as seen in the adc16_controller memory map)
+            # writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2
+            # as seen in the adc16_controller memory map)
             state = (4 + 1) << demux_shift
             self.write_int('adc16_controller', state, offset=1, blindwrite=True)
 
@@ -306,27 +339,39 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
 
     def adc16_based(self):
+        """ Check if design uses ADC16 chip """
         if 'adc16_controller' in self.listdev():
             print('Design is ADC16-based')
         else:
             print('Design is not ADC16-based')
             exit(1)
 
-            # Selects a test pattern or sampled data for all ADCs selected by
-            # +chip_select+.  +ptn+ can be any of:
-            #
-            #   :ramp            Ramp pattern 0-255
-            #   :deskew (:eye)   Deskew pattern (10101010)
-            #   :sync (:frame)   Sync pattern (11110000)
-            #   :custom1         Custom1 pattern
-            #   :custom2         Custom2 pattern
-            #   :dual            Dual custom pattern
-            #   :none            No pattern (sampled data)
-            #
-            # Default is :ramp.  Any value other than shown above is the same as :none
-            # (i.e. pass through sampled data).
+
 
     def enable_pattern(self, pattern):
+        """
+
+        Args:
+            pattern (str): select a test pattern (ramp, deskew, sync, none, ...).
+                           see list in notes for more details
+
+
+
+        Notes
+             Selects a test pattern or sampled data for all ADCs selected by
+             +chip_select+.  +ptn+ can be any of:
+
+               :ramp            Ramp pattern 0-255
+               :deskew (:eye)   Deskew pattern (10101010)
+               :sync (:frame)   Sync pattern (11110000)
+               :custom1         Custom1 pattern
+               :custom2         Custom2 pattern
+               :dual            Dual custom pattern
+               :none            No pattern (sampled data)
+
+             Default is :ramp.  Any value other than shown above is the same as :none
+             (i.e. pass through sampled data)
+        """
         self.write_adc(0x25, 0x00)
         self.write_adc(0x45, 0x00)
         if pattern == 'ramp':
@@ -375,10 +420,10 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
     def bitslip(self, chip_num, channel):
         """
-        # The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of
-        # A and B lanes, respectively.
-        # Refer to the memory map word 2 and word 3 for clarification. The memory map was made for a
-        # ROACH design so it has chips A-H. SNAP 1 design has three chips
+        The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of
+        A and B lanes, respectively.
+        Refer to the memory map word 2 and word 3 for clarification. The memory map was made for a
+        ROACH design so it has chips A-H. SNAP 1 design has three chips
         """
         chan_shift = 5
         chan_select_bs = channel << chan_shift
@@ -453,10 +498,11 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
     def test_tap(self, chip_num, taps):
         """
-        # returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-        # taps argument can have a value of an int or a string. If it's a string then it will iterate through all 32 taps
-        # if it's an int it will only delay all channels by that particular tap value.
+        returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
+        taps argument can have a value of an int or a string. If it's a string then it will iterate through all 32 taps
+        if it's an int it will only delay all channels by that particular tap value.
         """
+
         if taps == 'all':
 
             error_count = []
