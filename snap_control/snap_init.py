@@ -1,6 +1,5 @@
 import snap
 
-
 def cmd_tool(args=None):
     from argparse import ArgumentParser
     p = ArgumentParser(description='python snap_init.py HOST BOF_FILE [OPTIONS]')
@@ -29,16 +28,12 @@ def cmd_tool(args=None):
     args = p.parse_args()
 
     # define an ADC16 class object and pass it keyword arguments
-    a = snap.SnapBoard(args.host, args.katcp_port, timeout=10,
-                       **{'bof': args.bof,
-                           'verbosity': args.verbosity,
-                           'chips': args.chips,
-                           'demux_mode': args.demux_mode,
-                           'test_pattern': args.test_pattern,
-                           'gain': args.gain})
-
-    # calibrate the snap_board chips using test patterns
-    a.calibrate()
+    s = snap.SnapBoard(args.host, args.katcp_port, timeout=10)
+    
+    s.program(boffile=args.bof, 
+              chips=args.chips, 
+              demux_mode=args.demux_mode, 
+              gain=args.gain)
 
 
 if __name__ == "__main__":

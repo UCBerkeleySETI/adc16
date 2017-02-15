@@ -11,7 +11,7 @@ this class, there may be occasion to access the ADC16 controller directly
 """
 
 import time
-import corr
+from . import katcp_wrapper
 import numpy as np
 import struct
 import logging
@@ -136,7 +136,7 @@ katcp_port = 7147
 
 
 
-class SnapBoard(corr.katcp_wrapper.FpgaClient):
+class SnapBoard(katcp_wrapper.FpgaClient):
     """
     Construct an snap_control instance. allowed kwargs are
 
@@ -147,27 +147,31 @@ class SnapBoard(corr.katcp_wrapper.FpgaClient):
     demux_mode
     gain
     chips
-    skip_flag
     """
-    def __init__(self, hostname, katcp_port=7147, timeout=10, **kwargs):
+    def __init__(self, hostname, katcp_port=7147, timeout=10, 
+                 verbose=False, **kwargs):
         super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
 
-        if kwargs['verbosity'] == True:
+        if verbose == True:
             logging.basicConfig(level=logging.DEBUG)
         else:
             logging.basicConfig(level=logging.INFO)
 
+    def program(self, boffile, gain=1, demux_mode=1, chips=['a', 'b', 'c']): 
+        """ Reprogram the FPGA with a given boffile 
+        
+        Notes: Overrides katcp_wrapper's progdev
+        """
         # Make a dictionary out of chips specified on command line.
         # mapping chip letters to numbers to facilitate writing to adc16_controller
-        self.test_pattern = kwargs['test_pattern']
-        self.demux_mode   = kwargs['demux_mode']
-        self.gain         = kwargs['gain']
+        self.demux_mode   = demux_mode
+        self.gain         = gain
         # create a chip dictionary to facilitate writing to adc16_controller
         self.chips = {}
         self.chip_select_a = 0
         self.chip_select_b = 0
         self.chip_select_c = 0
-        for chip in kwargs['chips']:
+        for chip in chips:
             if chip.lower() == 'a':
                 self.chips['a'] = 0
                 self.chip_select_a = 1 << self.chips['a']
@@ -184,22 +188,14 @@ class SnapBoard(corr.katcp_wrapper.FpgaClient):
         print('Chips select:', bin(self.chip_select))
 
         # Instantiating a snap object with attributes of FpgaClient class
-        print('Connecting to SNAP.....')
-        time.sleep(1)
 
         if self.is_connected():
             print('Connected to SNAP!')
         else:
             logging.error('Couldn\'t connect to SNAP, check your connection..')
             exit(1)
-        # Dealing with flags passed into argsparse at the prompt by the user
-        if kwargs['skip_flag'] == True:
-            print('Not programming the bof file')
-        else:
-            print('Programming the bof file....')
-            self.progdev(kwargs['bof'])
-            print('Programmed!')
-
+        self.progdev(boffile)
+        self.calibrate()
 
     def write_adc(self, addr, data):
         """
