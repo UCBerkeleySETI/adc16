@@ -1,8 +1,11 @@
-import matplotlib.pyplot as plt
-import logging
+"""
+# plot_chans.py
 
+Plotting scripts for SnapBoard
+
+"""
 import snap
-
+import os
 
 def demux_data(snapshot, demux):
     """ Demux and interleaves data for plotting """
@@ -57,8 +60,17 @@ def cmd_tool(args=None):
                    help='KATCP port to connect to (default 7147)')
     p.add_argument('-d', '--demux', dest='demux_mode', type=int, default=1,
                    help='ADC demux mode (1, 2 or 4)')
+    p.add_argument('-r', '--remote', dest='remote_connection', action='store_true', default=False,
+                   help='Faster plotting for remote connection')
 
     args = p.parse_args()
+
+    if args.remote_connection:
+        import matplotlib
+        # see http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
+        matplotlib.use('Svg')
+
+    import matplotlib.pyplot as plt
 
     # define an ADC16 class object and pass it keyword arguments
     s = snap.SnapBoard(args.host, args.katcp_port)
@@ -117,9 +129,11 @@ def cmd_tool(args=None):
             exit(1)
     plt.ylim([-6, 6])
     plt.tight_layout()
-    plt.show()
-
-
+    if args.remote_connection:
+        plt.savefig('plot.svg')
+        os.system('feh plot.svg')
+    else:
+        plt.show()
 
 if __name__ == '__main__':
     cmd_tool()
