@@ -24,6 +24,9 @@ def cmd_tool(args=None):
         'c': 2
     }
     s.adc.set_chip_select(('a', 'b', 'c'))
+
+    plt.figure('plot_chans', figsize=(8, 6))
+
     for chip, chip_num in chip_dict.iteritems():
 
         # calibrate the snap_control chips using test patterns
@@ -130,6 +133,7 @@ def cmd_tool(args=None):
             print('Improper demux mode selected, possible values are 1, 2 and 4')
             exit(1)
     plt.ylim([-6, 6])
+    plt.tight_layout()
     plt.show()
 
 if __name__ == '__main__':
