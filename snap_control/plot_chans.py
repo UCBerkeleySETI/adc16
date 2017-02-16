@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 import logging
 
-from snap import SnapBoard
+import snap
 
-if __name__ == '__main__':
+def cmd_tool(args=None):
     from argparse import ArgumentParser
 
     p = ArgumentParser(description='python plot_chans.py HOST')
@@ -16,7 +16,7 @@ if __name__ == '__main__':
     args = p.parse_args()
 
     # define an ADC16 class object and pass it keyword arguments
-    s = SnapBoard(args.host, args.katcp_port)
+    s = snap.SnapBoard(args.host, args.katcp_port)
 
     chip_dict = {
         'a': 0,
@@ -131,3 +131,6 @@ if __name__ == '__main__':
             exit(1)
     plt.ylim([-6, 6])
     plt.show()
+
+if __name__ == '__main__':
+    cmd_tool()

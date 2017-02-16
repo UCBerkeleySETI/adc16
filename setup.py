@@ -11,6 +11,7 @@ version = '1.0.0'
 entry_points = {
     'console_scripts' :
         ['snap_init = snap_control.snap_init:cmd_tool',
+         'snap_plot_chans = snap_control.plot_chans:cmd_tool'
      ]
     }
 
