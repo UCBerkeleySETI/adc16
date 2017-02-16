@@ -23,7 +23,7 @@ def cmd_tool(args=None):
         'b': 1,
         'c': 2
     }
-
+    s.adc.set_chip_select(('a', 'b', 'c'))
     for chip, chip_num in chip_dict.iteritems():
 
         # calibrate the snap_control chips using test patterns
