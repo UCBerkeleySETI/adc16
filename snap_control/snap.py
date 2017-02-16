@@ -8,6 +8,69 @@ design and clock status.  While most access will be done via the methods of
 this class, there may be occasion to access the ADC16 controller directly
 (via the #adc16_controller method, which returns a KATCP::Bram object)
 
+
+## ADC16 controller memory map
+
+   # ======================================= #             # ======================================= #
+   # ADC16 3-Wire Register (word 0)          #             # ADC16 Control Register (word 1)         #
+   # ======================================= #             # ======================================= #
+   # LL = Clock locked bits                  #             # W  = Deux write-enable                  #
+   # NNNN = Number of ADC chips supported    #             # MM = Demux mode                         #
+   # RR = ROACH2 revision expected/required  #             # R = ADC16 Reset                         #
+   # C = SCLK                                #             # S = Snap Request                        #
+   # D = SDATA                               #             # H = ISERDES Bit Slip Chip H             #
+   # 7 = CSNH (chip select H, active high)   #             # G = ISERDES Bit Slip Chip G             #
+   # 6 = CSNG (chip select G, active high)   #             # F = ISERDES Bit Slip Chip F             #
+   # 5 = CSNF (chip select F, active high)   #             # E = ISERDES Bit Slip Chip E             #
+   # 4 = CSNE (chip select E, active high)   #             # D = ISERDES Bit Slip Chip D             #
+   # 3 = CSND (chip select D, active high)   #             # C = ISERDES Bit Slip Chip C             #
+   # 2 = CSNC (chip select C, active high)   #             # B = ISERDES Bit Slip Chip B             #
+   # 1 = CSNB (chip select B, active high)   #             # A = ISERDES Bit Slip Chip A             #
+   # 0 = CSNA (chip select A, active high)   #             # T = Delay Tap
+   # ======================================= #             # i = Bitslip specific channel(out of 8)  #
+   # |<-- MSb                       LSb -->| #             # ======================================= #
+   # 0000_0000_0011_1111_1111_2222_2222_2233 #             # |<-- MSb                       LSb -->| #
+   # 0123_4567_8901_2345_6789_0123_4567_8901 #             # 0000 0000 0011 1111 1111 2222 2222 2233 #
+   # ---- --LL ---- ---- ---- ---- ---- ---- #             # 0123 4567 8901 2345 6789 0123 4567 8901 #
+   # ---- ---- NNNN ---- ---- ---- ---- ---- #             # ---- -WMM ---- ---- ---- ---- ---- ---- #
+   # ---- ---- ---- --RR ---- ---- ---- ---- #             # ---- ---- ---R ---- ---- ---- ---- ---- #
+   # ---- ---- ---- ---- ---- --C- ---- ---- #             # ---- ---- ---- ---S ---- ---- ---- ---- #
+   # ---- ---- ---- ---- ---- ---D ---- ---- #             # ---- ---- ---- ---- HGFE DCBA iii- ---- #
+   # ---- ---- ---- ---- ---- ---- 7654 3210 #             # ---- ---- ---- ---- ---- ---- ---T TTTT #
+   # |<--- Status ---->| |<--- 3-Wire ---->| #             # ======================================= #
+   # ======================================= #             # NOTE: W enables writing the MM bits.    #
+   # NOTE: LL reflects the runtime lock      #             #       Some of the other bits in this    #
+   #       status of a line clock from each  #             #       register are one-hot.  Using      #
+   #       ADC board.  A '1' bit means       #             #       W ensures that the MM bits will   #
+   #       locked (good!).  Bit 5 is always  #             #       only be written to when desired.  #
+   #       used, but bit 6 is only used when #             #       00: demux by 1 (single channel)   #
+   #       NNNN is 4 (or less).              #             # ======================================= #
+   # ======================================= #             # NOTE: MM selects the demux mode.        #
+   # NOTE: NNNN and RR are read-only values  #             #       00: demux by 1 (quad channel)     #
+   #       that are set at compile time.     #             #       01: demux by 2 (dual channel)     #
+   #       They do not indicate the state    #             #       10: demux by 4 (single channel)   #
+   #       of the actual hardware in use     #             #       11: undefined                     #
+   #       at runtime.                       #             #       ADC board.  A '1' bit means       #
+   # ======================================= #             #       locked (good!).  Bit 5 is always  #
+                                                           #       used, but bit 6 is only used when #
+                                                           #       NNNN is 4 (or less).              #
+                                                           # ======================================= #
+
+
+   # =============================================== #     # =============================================== #
+   # ADC16 Delay A Strobe Register (word 2)          #     # ADC0 Delay B Strobe Register (word 3)           #
+   # =============================================== #     # =============================================== #
+   # D = Delay Strobe (rising edge active)           #     # D = Delay Strobe (rising edge active)           #
+   # =============================================== #     # =============================================== #
+   # |<-- MSb                              LSb -->|  #     # |<-- MSb                              LSb -->|  #
+   # 0000  0000  0011  1111  1111  2222  2222  2233  #     # 0000  0000  0011  1111  1111  2222  2222  2233  #
+   # 0123  4567  8901  2345  6789  0123  4567  8901  #     # 0123  4567  8901  2345  6789  0123  4567  8901  #
+   # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #     # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #
+   # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #     # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #
+   # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #     # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #
+   # =============================================== #     # =============================================== #
+
+
 """
 
 import time
@@ -19,160 +82,27 @@ import logging
 katcp_port = 7147
 
 
-# Here is the memory map for the underlying #adc16_controller device:
-#
-#   # ======================================= #
-#   # ADC16 3-Wire Register (word 0)          #
-#   # ======================================= #
-#   # LL = Clock locked bits                  #
-#   # NNNN = Number of ADC chips supported    #
-#   # RR = ROACH2 revision expected/required  #
-#   # C = SCLK                                #
-#   # D = SDATA                               #
-#   # 7 = CSNH (chip select H, active high)   #
-#   # 6 = CSNG (chip select G, active high)   #
-#   # 5 = CSNF (chip select F, active high)   #
-#   # 4 = CSNE (chip select E, active high)   #
-#   # 3 = CSND (chip select D, active high)   #
-#   # 2 = CSNC (chip select C, active high)   #
-#   # 1 = CSNB (chip select B, active high)   #
-#   # 0 = CSNA (chip select A, active high)   #
-#   # ======================================= #
-#   # |<-- MSb                       LSb -->| #
-#   # 0000_0000_0011_1111_1111_2222_2222_2233 #
-#   # 0123_4567_8901_2345_6789_0123_4567_8901 #
-#   # ---- --LL ---- ---- ---- ---- ---- ---- #
-#   # ---- ---- NNNN ---- ---- ---- ---- ---- #
-#   # ---- ---- ---- --RR ---- ---- ---- ---- #
-#   # ---- ---- ---- ---- ---- --C- ---- ---- #
-#   # ---- ---- ---- ---- ---- ---D ---- ---- #
-#   # ---- ---- ---- ---- ---- ---- 7654 3210 #
-#   # |<--- Status ---->| |<--- 3-Wire ---->| #
-#   # ======================================= #
-#   # NOTE: LL reflects the runtime lock      #
-#   #       status of a line clock from each  #
-#   #       ADC board.  A '1' bit means       #
-#   #       locked (good!).  Bit 5 is always  #
-#   #       used, but bit 6 is only used when #
-#   #       NNNN is 4 (or less).              #
-#   # ======================================= #
-#   # NOTE: NNNN and RR are read-only values  #
-#   #       that are set at compile time.     #
-#   #       They do not indicate the state    #
-#   #       of the actual hardware in use     #
-#   #       at runtime.                       #
-#   # ======================================= #
-#
-#   # ======================================= #
-#   # ADC16 Control Register (word 1)         #
-#   # ======================================= #
-#   # W  = Deux write-enable                  #
-#   # MM = Demux mode                         #
-#   # R = ADC16 Reset                         #
-#   # S = Snap Request                        #
-#   # H = ISERDES Bit Slip Chip H             #
-#   # G = ISERDES Bit Slip Chip G             #
-#   # F = ISERDES Bit Slip Chip F             #
-#   # E = ISERDES Bit Slip Chip E             #
-#   # D = ISERDES Bit Slip Chip D             #
-#   # C = ISERDES Bit Slip Chip C             #
-#   # B = ISERDES Bit Slip Chip B             #
-#   # A = ISERDES Bit Slip Chip A             #
-#   # T = Delay Tap
-#   # i = Bitslip specific channel(out of 8)  #
-#   # ======================================= #
-#   # |<-- MSb                       LSb -->| #
-#   # 0000 0000 0011 1111 1111 2222 2222 2233 #
-#   # 0123 4567 8901 2345 6789 0123 4567 8901 #
-#   # ---- -WMM ---- ---- ---- ---- ---- ---- #
-#   # ---- ---- ---R ---- ---- ---- ---- ---- #
-#   # ---- ---- ---- ---S ---- ---- ---- ---- #
-#   # ---- ---- ---- ---- HGFE DCBA iii- ---- #
-#   # ---- ---- ---- ---- ---- ---- ---T TTTT #
-#   # ======================================= #
-#   # NOTE: W enables writing the MM bits.    #
-#   #       Some of the other bits in this    #
-#   #       register are one-hot.  Using      #
-#   #       W ensures that the MM bits will   #
-#   #       only be written to when desired.  #
-#   #       00: demux by 1 (single channel)   #
-#   # ======================================= #
-#   # NOTE: MM selects the demux mode.        #
-#   #       00: demux by 1 (quad channel)     #
-#   #       01: demux by 2 (dual channel)     #
-#   #       10: demux by 4 (single channel)   #
-#   #       11: undefined                     #
-#   #       ADC board.  A '1' bit means       #
-#   #       locked (good!).  Bit 5 is always  #
-#   #       used, but bit 6 is only used when #
-#   #       NNNN is 4 (or less).              #
-#   # ======================================= #
-#
-#   # =============================================== #
-#   # ADC16 Delay A Strobe Register (word 2)          #
-#   # =============================================== #
-#   # D = Delay Strobe (rising edge active)           #
-#   # =============================================== #
-#   # |<-- MSb                              LSb -->|  #
-#   # 0000  0000  0011  1111  1111  2222  2222  2233  #
-#   # 0123  4567  8901  2345  6789  0123  4567  8901  #
-#   # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #
-#   # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #
-#   # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #
-#   # =============================================== #
-#
-#   # =============================================== #
-#   # ADC0 Delay B Strobe Register (word 3)           #
-#   # =============================================== #
-#   # D = Delay Strobe (rising edge active)           #
-#   # =============================================== #
-#   # |<-- MSb                              LSb -->|  #
-#   # 0000  0000  0011  1111  1111  2222  2222  2233  #
-#   # 0123  4567  8901  2345  6789  0123  4567  8901  #
-#   # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #
-#   # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #
-#   # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #
-#   # =============================================== #
+class SnapAdc(object):
+    """" Controller for HMCAD1511 ADC chip, as used in CASPER SNAP and ROACH2 boards
 
+    Provides control and calibration routines for the HMCAD1511.
 
-class SnapBoard(katcp_wrapper.FpgaClient):
+    Args:
+        host (SnapBoard or FpgaClient object): Instance which has the adc16_controller
+
     """
-    Construct an snap_control instance. allowed kwargs are
 
-    hostname
-    katcp_port
-    timeout
-    test_pattern
-    demux_mode
-    gain
-    chips
-    """
-    def __init__(self, hostname, katcp_port=7147, timeout=10, 
-                 verbose=False, **kwargs):
-        super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
+    def __repr__(self):
+        return "<SNAP HMCAD1511 8-bit ADC controller on %s>" % self.host.host
 
-        if verbose == True:
-            logging.basicConfig(level=logging.DEBUG)
-        else:
-            logging.basicConfig(level=logging.INFO)
+    def __init__(self, host):
+        self.host = host
 
         # create a chip dictionary to facilitate writing to adc16_controller
         self.chips = {}
         self.demux_mode    = None
         self.gain          = None
         self.chip_select   = None
-        self.katcp_port    = katcp_port
-
-    def __repr__(self):
-
-        return "<SnapBoard host: %s port: %s>" % (self.host, self.katcp_port)
-
-    def adc16_based(self):
-        """ Check if design uses ADC16 chip """
-        if 'adc16_controller' in self.listdev():
-            return True
-        else:
-            return False
 
     def set_chip_select(self, chips):
         """ Setup which chips will be used in the programmed design
@@ -201,27 +131,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
                 exit(1)
         self.chip_select = chip_select_a | chip_select_b | chip_select_c
 
-    def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
-        """ Reprogram the FPGA with a given boffile AND calibrates
-
-        Adds gain, demux_mode and chips params to katcp_wrapper's progdev
-
-        Args:
-            boffile (str): Name of boffile to program
-            gain (int): ADC gain, from 1-32 (1, 2, 4, 8 recommended)
-
-        """
-        # Make a dictionary out of chips specified on command line.
-        # mapping chip letters to numbers to facilitate writing to adc16_controller
-        self.progdev(boffile)
-
-        if self.adc16_based():
-            self.adc_set_demux(demux_mode)
-            self.gain         = gain
-            self.set_chip_select(chips)
-            self.calibrate()
-
-    def adc_write(self, addr, data):
+    def write(self, addr, data):
         """
         # write_adc is used for writing specific ADC registers.
         # ADC controller can only write to adc one bit at a time at rising clock edge
@@ -230,60 +140,60 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         CS = self.chip_select
         IDLE = SCLK
         SDA_SHIFT = 8
-        self.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
+        self.host.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
         for i in range(8):
             addr_bit = (addr >> (8 - i - 1)) & 1
             state = (addr_bit << SDA_SHIFT) | CS
-            self.write_int('adc16_controller', state, offset=0, blindwrite=True)
+            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
             logging.debug("Printing address state written to adc16_controller, offset=0, clock low")
             logging.debug(np.binary_repr(state, width=32))
             state = (addr_bit << SDA_SHIFT) | CS | SCLK
-            self.write_int('adc16_controller', state, offset=0, blindwrite=True)
+            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
             logging.debug("Printing address state written to adc16_controller, offset=0, clock high")
             logging.debug(np.binary_repr(state, width=32))
 
         for j in range(16):
             data_bit = (data >> (16 - j - 1)) & 1
             state = (data_bit << SDA_SHIFT) | CS
-            self.write_int('adc16_controller', state, offset=0, blindwrite=True)
+            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
             logging.debug("Printing data state written to adc16_controller, offset=0, clock low")
             logging.debug(np.binary_repr(state, width=32))
             state = (data_bit << SDA_SHIFT) | CS | SCLK
-            self.write_int('adc16_controller', state, offset=0, blindwrite=True)
+            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
             logging.debug("Printing data address state written to adc16_controller, offset=0, clock high")
             logging.debug(np.binary_repr(state, width=32))
 
-        self.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
+        self.host.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
 
-    def adc_power_cycle(self):
+    def power_cycle(self):
         """ Power cycle the ADC """
         logging.info('Power cycling the ADC')
         # power adc down
-        self.adc_write(0x0f, 0x0200)
+        self.write(0x0f, 0x0200)
         # power adc up
-        self.adc_write(0x0f, 0x0000)
+        self.write(0x0f, 0x0000)
 
-    def adc_reset(self):
+    def reset(self):
         """ Reset the ADC """
         logging.info('Initializing ADC')
         # reset adc
-        self.adc_write(0x00, 0x0001)
+        self.write(0x00, 0x0001)
 
-    def adc_initialize(self, demux_mode):
+    def initialize(self, demux_mode):
         """ Initialize the ADC
 
         Args:
             demux_mode (int): Set demulitplexing to 1 (no interleave), 2 or 4 (interleave all)
         """
-        self.adc_reset()
+        self.reset()
         # power adc down
-        self.adc_write(0x0f, 0x0200)
+        self.write(0x0f, 0x0200)
         # select operating mode
-        self.adc_set_demux(demux_mode)
+        self.set_demux(demux_mode)
         # power adc up
-        self.adc_write(0x0f, 0x0000)
+        self.write(0x0f, 0x0000)
 
-    def adc_set_demux(self, demux_mode):
+    def set_demux(self, demux_mode):
         """ Set demux factor for ADC mode
 
         Interleave all inputs: demux=4
@@ -296,62 +206,32 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         self.demux_mode = demux_mode
         if self.demux_mode == 1:
             # Setting number of channes to 4
-            self.adc_write(0x31, 0x04)
+            self.write(0x31, 0x04)
             # Route inputs to respective ADC's for demux 1
             print('Routing all four inputs to corresponding ADC channels')
-            self.adc_write(0x3a, 0x0402)
-            self.adc_write(0x3b, 0x1008)
+            self.write(0x3a, 0x0402)
+            self.write(0x3b, 0x1008)
         elif self.demux_mode == 2:
             # Setting number of channels to 2
-            self.adc_write(0x31, 0x02)
+            self.write(0x31, 0x02)
             # Routing input 1 and input 3 to ADC for interleaving
             print('Setting ADC to interleave inputs 1 (ADC0) and 3 (ADC2)')
             # Selecting input 1
-            self.adc_write(0x3a, 0x0202)
+            self.write(0x3a, 0x0202)
             # Selecting input 3
-            self.adc_write(0x3b, 0x0808)
+            self.write(0x3b, 0x0808)
         elif self.demux_mode == 4:
             # Setting the number of channels to 1
-            self.adc_write(0x31, 0x01)
+            self.write(0x31, 0x01)
             print('Setting ADC to interleave input (ADC0)')
             # Selecting input 1
-            self.adc_write(0x3a, 0x0202)
-            self.adc_write(0x3b, 0x0202)
+            self.write(0x3a, 0x0202)
+            self.write(0x3b, 0x0202)
         else:
             logging.error('demux_mode variable not assigned. Weird.')
             exit(1)
 
-
-    def fpga_set_demux(self, fpga_demux):
-        """ Set demux on FPGA
-
-        Notes:
-            Setting fpga demux rearranges the bits before they're output from the adc block depending on
-            the adc demux mode used.
-            State is assigned according to the adc16_controller memory map. (4+n) shifted by the amount of bits
-            that precede the WMM field.
-            4 always activates the W bit to allow writing to the MM bits and n is determined by the adc demux mode used
-        """
-
-        demux_shift = 24
-
-        if fpga_demux == 1:
-            state = (4 + 0) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
-        elif fpga_demux == 2:
-            # writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2
-            # as seen in the adc16_controller memory map)
-            state = (4 + 1) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
-
-        elif fpga_demux == 4:
-            state = (4 + 2) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
-        else:
-            print('Invalid or no demux mode specified')
-            exit(1)
-
-    def adc_enable_pattern(self, pattern):
+    def enable_pattern(self, pattern):
         """
 
         Args:
@@ -375,14 +255,14 @@ class SnapBoard(katcp_wrapper.FpgaClient):
              Default is :ramp.  Any value other than shown above is the same as :none
              (i.e. pass through sampled data)
         """
-        self.adc_write(0x25, 0x00)
-        self.adc_write(0x45, 0x00)
+        self.write(0x25, 0x00)
+        self.write(0x45, 0x00)
         if pattern == 'ramp':
-            self.adc_write(0x25, 0x0040)
+            self.write(0x25, 0x0040)
         elif pattern == 'deskew':
-            self.adc_write(0x45, 0x0001)
+            self.write(0x45, 0x0001)
         elif pattern == 'sync':
-            self.adc_write(0x45, 0x0002)
+            self.write(0x45, 0x0002)
         else:
             print('Invalid test pattern selected')
             exit(1)
@@ -391,15 +271,15 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         #			self.write_adc(0x26,(self.expected)<<8)
         time.sleep(1)
 
-    def adc_read_ram(self, device):
+    def read_ram(self, device):
         SNAP_REQ = 0x00010000
-        self.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.write_int('adc16_controller', SNAP_REQ, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', SNAP_REQ, offset=1, blindwrite=True)
         # Read the device that is passed to the read_ram method,1024 elements at a time,
         # snapshot is a binary string that needs to get unpacked
         # Part of the read request is the size parameter,1024, which specifies the
         # amount of bytes to read form the device
-        snapshot = self.read(device, 1024, offset=0)
+        snapshot = self.host.read(device, 1024, offset=0)
 
         # struct unpack returns a tuple of signed int values.
         # Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking
@@ -419,7 +299,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         return array_data
 
 
-    def adc_bitslip(self, chip_num, channel):
+    def bitslip(self, chip_num, channel):
         """
         The ADC16 controller word (the offset in write_int method) 2 and 3 are for delaying taps of
         A and B lanes, respectively.
@@ -433,30 +313,30 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         chip_select_bs = 1 << chip_shift + chip_num
         state = (chip_select_bs | chan_select_bs)
         #		print('Bitslip state written to offset=1:',bin(state))
-        self.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', state, offset=1, blindwrite=True)
         #	regvalue=self.read('adc16_controller', 32, offset=1)
         #	print('Bitslip Reg Value\n')
         #	print(struct.unpack('>32b', regvalue))
-        self.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
 
-    def adc_delay_tap(self, tap, channel, chip_num):
+    def delay_tap(self, tap, channel, chip_num):
 
         if channel == 'all':
             chan_select = (0xf << (chip_num * 4))
 
             delay_tap_mask = 0x1f
-            self.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-            self.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
             # Set tap bits
-            self.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
+            self.host.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
             # Set strobe bits
-            self.write_int('adc16_controller', chan_select, offset=2, blindwrite=True)
-            self.write_int('adc16_controller', chan_select, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', chan_select, offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', chan_select, offset=3, blindwrite=True)
             # Clear all bits
-            self.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-            self.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-            self.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
             # Note this return statement, after all channels have been bitslip it'll exit out of the function.
             # the function is called again after figuring out the best tap with a single channel argument.
             return
@@ -486,18 +366,18 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             lane_offset = 3
 
         delay_tap_mask = 0x1f
-        self.write_int('adc16_controller', 0, offset=lane_offset, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=lane_offset, blindwrite=True)
         # Set tap bits
-        self.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
         # Set strobe bits
-        self.write_int('adc16_controller', chan_select, offset=lane_offset, blindwrite=True)
+        self.host.write_int('adc16_controller', chan_select, offset=lane_offset, blindwrite=True)
         # Clear all bits
-        self.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-        self.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
 
 
-    def adc_test_tap(self, chip_num, taps):
+    def test_tap(self, chip_num, taps):
         """
         returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
         taps argument can have a value of an int or a string. If it's a string then it will iterate through all 32 taps
@@ -510,8 +390,8 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             # read_ram reuturns an array of data form a sanpshot from ADC output
             for tap in range(32):
 
-                self.adc_delay_tap(tap, 'all', chip_num)
-                data = self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num))
+                self.delay_tap(tap, 'all', chip_num)
+                data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
                 # each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
 
                 chan1a_error = 0
@@ -553,8 +433,8 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             error_count = []
             # read_ram reuturns an array of data form a sanpshot from ADC output
 
-            self.adc_delay_tap(taps, 'all', chip_num)
-            data = self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num))
+            self.delay_tap(taps, 'all', chip_num)
+            data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
             # each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
 
             chan1a_error = 0
@@ -593,7 +473,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             logging.debug('Error count for {0} tap: {1}'.format(taps, error_count))
             return (error_count)
 
-    def adc_walk_taps(self):
+    def walk_taps(self):
         for chip, chip_num in self.chips.iteritems():
             # Set demux 4 on the FPGA side (just rearranging outputs as opposed to dividing clock and assigning channels)
             self.fpga_set_demux(4)
@@ -601,23 +481,23 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             print('Calibrating chip %s...' % chip)
             logging.debug('Setting deskew pattern...')
             logging.debug('Stuff in chip %s before enabling pattern' % chip)
-            logging.debug(self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num)))
-            self.adc_enable_pattern('deskew')
+            logging.debug(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
+            self.enable_pattern('deskew')
             logging.debug('Stuff in chip after enabling test mode\n')
-            logging.debug(self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num)))
+            logging.debug(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
 
             logging.debug('Taps before bitslipping anything\n')
-            logging.debug(self.adc_test_tap(chip_num, 'all'))
+            logging.debug(self.test_tap(chip_num, 'all'))
             # check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True.
             # This is to make sure that the eye of the pattern is swept completely
-            error_counts_0 = self.adc_test_tap(chip_num, 0)
-            error_counts_31 = self.adc_test_tap(chip_num, 31)
+            error_counts_0 = self.test_tap(chip_num, 0)
+            error_counts_31 = self.test_tap(chip_num, 31)
             for i in range(8):
                 if not (error_counts_0[0][i]) or not (error_counts_31[0][i]):
                     logging.debug('Bitslipping chan %i' % i)
-                    self.adc_bitslip(chip_num, i)
-                    error_counts_0 = self.adc_test_tap(chip_num, 0)
-                    error_counts_31 = self.adc_test_tap(chip_num, 31)
+                    self.bitslip(chip_num, i)
+                    error_counts_0 = self.test_tap(chip_num, 0)
+                    error_counts_31 = self.test_tap(chip_num, 31)
 
             # error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors
             # of that lane  when compared to the expected value. read_ram method unpacks 1024 bytes. There are 8
@@ -626,7 +506,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             # tap 1: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
             # .....: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
             # tap 31:[ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
-            error_list = self.adc_test_tap(chip_num, 'all')
+            error_list = self.test_tap(chip_num, 'all')
             good_tap_range = []
             best_tap_range = []
             logging.debug('Printing the list of errors, each row is a tap\n')
@@ -656,19 +536,19 @@ class SnapBoard(katcp_wrapper.FpgaClient):
                 max_tap = max(good_tap_range[k])
 
                 best_tap = (min_tap + max_tap) // 2
-                self.adc_delay_tap(best_tap, channels[k], chip_num)
+                self.delay_tap(best_tap, channels[k], chip_num)
             logging.debug('Printing the calibrated data from ram{0}.....'.format(self.chips[chip]))
-            logging.debug(self.adc_read_ram('adc16_wb_ram{0}'.format(self.chips[chip])))
+            logging.debug(self.read_ram('adc16_wb_ram{0}'.format(self.chips[chip])))
 
             # Bitslip channels until the sync pattern is captured
-            self.adc_sync_chips(chip_num)
+            self.sync_chips(chip_num)
 
-    def adc_sync_chips(self, chip_num):
+    def sync_chips(self, chip_num):
         """ Synchronize chips with bitslip """
         # channels = {0:'1a',1:'1b',2:'2a',3:'2b',4:'3a',5:'3b',6:'4a',7:'4b'}
-        self.adc_enable_pattern('sync')
+        self.enable_pattern('sync')
 
-        snap = self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num))
+        snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
         logging.debug('Snapshot before bitslipping:\n')
         logging.debug(snap[0:8])
 
@@ -676,8 +556,8 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             loop_ctl = 0
             while snap[i] != 0x70:
                 logging.debug('Bitsliping channel %i\n' % i)
-                self.adc_bitslip(chip_num, i)
-                snap = self.adc_read_ram('adc16_wb_ram{0}'.format(chip_num))
+                self.bitslip(chip_num, i)
+                snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
                 logging.debug('Snapshot after bitslipping:\n')
                 logging.debug(snap[0:8])
                 loop_ctl += 1
@@ -686,48 +566,134 @@ class SnapBoard(katcp_wrapper.FpgaClient):
                         "It appears that bitslipping is not working, make sure you're using the version of Jasper library")
                     exit(1)
 
-    def adc_clock_locked(self):
+    def clock_locked(self):
         """ Check if CLK is locked """
-        locked_bit = self.read_int('adc16_controller', offset=0) >> 24
+        locked_bit = self.host.read_int('adc16_controller', offset=0) >> 24
         if locked_bit & 3:
             logging.info('ADC clock is locked!!!')
-            print(self.est_brd_clk())
+            print(self.host.est_brd_clk())
         else:
             logging.error('ADC clock not locked, check your clock source/correctly set demux mode')
             exit(1)
 
-    def adc_clear_pattern(self):
+    def clear_pattern(self):
         """Clears test pattern from ADCs"""
-        self.adc_write(0x25, 0x00)
-        self.adc_write(0x45, 0x00)
+        self.write(0x25, 0x00)
+        self.write(0x45, 0x00)
 
     def adc_set_gain(self):
         """ Set gain value on ADCs"""
         if self.demux_mode == 1:
-            self.adc_write(0x2a, self.gain * 0x1111)
+            self.write(0x2a, self.gain * 0x1111)
         elif self.demux_mode == 2:
-            self.adc_write(0x2b, self.gain * 0x0011)
+            self.write(0x2b, self.gain * 0x0011)
         elif self.demux_mode == 4:
-            self.adc_write(0x2b, self.gain * 0x0100)
+            self.write(0x2b, self.gain * 0x0100)
         else:
             print('demux mode is not set')
             exit(1)
 
-    def adc_calibrate(self):
+    def calibrate(self):
         """" Run calibration routines """
-        if self.adc16_based():
-            self.adc_initialize()
-            # check if clock is locked
-            self.adc_clock_locked()
-            # check if design is ADC16 based
+        self.initialize()
+        # check if clock is locked
+        self.clock_locked()
+        # check if design is ADC16 based
 
-            # Setting gain value, default is 1
-            self.adc_set_gain()
-            # Calibrate ADC by going through various tap values
-            self.adc_walk_taps()
-            # Clear pattern setting registers so real data could be taken
-            self.adc_clear_pattern()
-            print('Setting fpga demux to %i' % self.demux_mode)
-            self.fpga_set_demux(self.demux_mode)
+        # Setting gain value, default is 1
+        self.adc_set_gain()
+        # Calibrate ADC by going through various tap values
+        self.walk_taps()
+        # Clear pattern setting registers so real data could be taken
+        self.clear_pattern()
+        print('Setting fpga demux to %i' % self.demux_mode)
+        self.host.fpga_set_demux(self.demux_mode)
+
+
+class SnapBoard(katcp_wrapper.FpgaClient):
+    """ Controller for a CASPER SNAP board.
+
+    Provides monitor and control of a CASPER SNAP board
+    """
+    def __init__(self, hostname, katcp_port=7147, timeout=10, 
+                 verbose=False, **kwargs):
+        super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
+        self.katcp_port = katcp_port
+
+        if verbose == True:
+            logging.basicConfig(level=logging.DEBUG)
         else:
-            raise RuntimeError("Design is not ADC16 based, cannot calibrate.")
+            logging.basicConfig(level=logging.INFO)
+
+        # Wait up to timeout to see if ADC is connected
+        t0 = time.time()
+        while not self.is_connected():
+            time.sleep(1e-3)
+            if time.time() - t0 > timeout:
+                break
+
+        # Check if design has an ADC controller; if so, attach controller as self.adc
+        self.adc = None
+        if self.is_connected():
+            if self.is_adc16_based():
+                self.adc = SnapAdc()
+
+    def __repr__(self):
+
+        return "<SnapBoard host: %s port: %s>" % (self.host, self.katcp_port)
+
+    def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
+        """ Reprogram the FPGA with a given boffile AND calibrates
+
+        Adds gain, demux_mode and chips params to katcp_wrapper's progdev
+
+        Args:
+            boffile (str): Name of boffile to program
+            gain (int): ADC gain, from 1-32 (1, 2, 4, 8 recommended)
+
+        """
+        # Make a dictionary out of chips specified on command line.
+        # mapping chip letters to numbers to facilitate writing to adc16_controller
+        self.progdev(boffile)
+
+        if self.is_adc16_based():
+            self.adc.set_demux(demux_mode)
+            self.adc.set_gain(gain)
+            self.adc.set_chip_select(chips)
+            self.adc.calibrate()
+
+    def is_adc16_based(self):
+        """ Check if design uses ADC16 chip """
+        if 'adc16_controller' in self.listdev():
+            return True
+        else:
+            return False
+
+    def fpga_set_demux(self, fpga_demux):
+        """ Set demux on FPGA
+
+        Notes:
+            Setting fpga demux rearranges the bits before they're output from the adc block depending on
+            the adc demux mode used.
+            State is assigned according to the adc16_controller memory map. (4+n) shifted by the amount of bits
+            that precede the WMM field.
+            4 always activates the W bit to allow writing to the MM bits and n is determined by the adc demux mode used
+        """
+
+        demux_shift = 24
+
+        if fpga_demux == 1:
+            state = (4 + 0) << demux_shift
+            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+        elif fpga_demux == 2:
+            # writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2
+            # as seen in the adc16_controller memory map)
+            state = (4 + 1) << demux_shift
+            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+
+        elif fpga_demux == 4:
+            state = (4 + 2) << demux_shift
+            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+        else:
+            print('Invalid or no demux mode specified')
+            exit(1)
