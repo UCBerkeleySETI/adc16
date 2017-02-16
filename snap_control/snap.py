@@ -103,7 +103,7 @@ class SnapAdc(object):
         self.demux_mode    = None
         self.gain          = None
         self.chip_select   = None
-
+   
     def set_chip_select(self, chips):
         """ Setup which chips will be used in the programmed design
 
@@ -476,7 +476,7 @@ class SnapAdc(object):
     def walk_taps(self):
         for chip, chip_num in self.chips.iteritems():
             # Set demux 4 on the FPGA side (just rearranging outputs as opposed to dividing clock and assigning channels)
-            self.fpga_set_demux(4)
+            self.host.fpga_set_demux(4)
 
             print('Calibrating chip %s...' % chip)
             logging.debug('Setting deskew pattern...')
@@ -581,8 +581,9 @@ class SnapAdc(object):
         self.write(0x25, 0x00)
         self.write(0x45, 0x00)
 
-    def adc_set_gain(self):
+    def set_gain(self, gain):
         """ Set gain value on ADCs"""
+        self.gain = gain
         if self.demux_mode == 1:
             self.write(0x2a, self.gain * 0x1111)
         elif self.demux_mode == 2:
@@ -595,13 +596,9 @@ class SnapAdc(object):
 
     def calibrate(self):
         """" Run calibration routines """
-        self.initialize()
+        #self.initialize()
         # check if clock is locked
         self.clock_locked()
-        # check if design is ADC16 based
-
-        # Setting gain value, default is 1
-        self.adc_set_gain()
         # Calibrate ADC by going through various tap values
         self.walk_taps()
         # Clear pattern setting registers so real data could be taken
@@ -636,7 +633,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         self.adc = None
         if self.is_connected():
             if self.is_adc16_based():
-                self.adc = SnapAdc()
+                self.adc = SnapAdc(self)
 
     def __repr__(self):
 
@@ -657,9 +654,9 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         self.progdev(boffile)
 
         if self.is_adc16_based():
+            self.adc.set_chip_select(chips)
             self.adc.set_demux(demux_mode)
             self.adc.set_gain(gain)
-            self.adc.set_chip_select(chips)
             self.adc.calibrate()
 
     def is_adc16_based(self):
