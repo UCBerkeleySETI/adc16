@@ -68,7 +68,7 @@ def cmd_tool(args=None):
     if args.remote_connection:
         import matplotlib
         # see http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
-        matplotlib.use('Svg')
+        matplotlib.use('Agg')
 
     import matplotlib.pyplot as plt
 
@@ -130,8 +130,8 @@ def cmd_tool(args=None):
     plt.ylim([-6, 6])
     plt.tight_layout()
     if args.remote_connection:
-        plt.savefig('plot.svg')
-        os.system('feh plot.svg')
+        plt.savefig('plot.png')
+        os.system('feh plot.png')
     else:
         plt.show()
 
