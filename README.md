@@ -1,4 +1,4 @@
-## ADC16 calibrationa and control
+## ADC16 calibration and control
 
 This repository houses calibration and control scripts for the HMCAD1511 ADC chips on the CASPER SNAP board.
 
