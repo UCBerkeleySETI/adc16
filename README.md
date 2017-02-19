@@ -24,8 +24,9 @@ where `snapname` is the hostname / IP of SNAP board, `boffile` is the name of th
 
 To program the board from a script:
 
-```
+```python
 from snap_control import SnapBoard
+
 s = snap.SnapBoard(host, katcp_port, timeout=10)
 s.program(boffile=bof, 
           chips=chips, 
