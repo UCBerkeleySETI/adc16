@@ -6,6 +6,13 @@ Plotting scripts for SnapBoard
 """
 import snap
 import os
+import numpy as np
+
+try:
+    import seaborn as sns
+    sns.set_style('white')
+except:
+    pass
 
 def demux_data(snapshot, demux):
     """ Demux and interleaves data for plotting """
@@ -20,7 +27,7 @@ def demux_data(snapshot, demux):
             input2_data.append(snapshot[i + 1])
             input3_data.append(snapshot[i + 2])
             input4_data.append(snapshot[i + 3])
-            return input1_data, input2_data, input3_data, input4_data
+        return input1_data, input2_data, input3_data, input4_data
 
     elif demux == 2:
         for i in range(0, 1024, 8):
@@ -33,7 +40,7 @@ def demux_data(snapshot, demux):
             input3_data.append(snapshot[i + 6])
             input3_data.append(snapshot[i + 3])
             input3_data.append(snapshot[i + 7])
-            return input1_data, input3_data
+        return input1_data, input3_data
 
     elif demux == 4:
         for i in range(0, 1024, 8):
@@ -45,7 +52,7 @@ def demux_data(snapshot, demux):
             input1_data.append(snapshot[i + 3])
             input1_data.append(snapshot[i + 5])
             input1_data.append(snapshot[i + 7])
-            return input1_data
+        return input1_data
 
     else:
         raise RuntimeError("Weird demux factor, use 1, 2 or 4.")
@@ -62,6 +69,14 @@ def cmd_tool(args=None):
                    help='ADC demux mode (1, 2 or 4)')
     p.add_argument('-r', '--remote', dest='remote_connection', action='store_true', default=False,
                    help='Faster plotting for remote connection')
+    p.add_argument('-f', '--fft', dest='do_fft', action='store_true', default=False,
+                   help='Plot ADC channel bandpass (i.e. take FFT^2 of snapshot data)')                   
+    p.add_argument('-T', '--deskewpattern', dest='pattern_deskew', action='store_true', default=False,
+                   help='Plot test pattern (deskew). Value should be a constant 42.')
+    #p.add_argument('-T', '--syncpattern', dest='pattern_sync', action='store_true', default=False,
+    #               help='Plot test pattern (sync)')
+    p.add_argument('-R', '--ramppattern', dest='pattern_ramp', action='store_true', default=False,
+                   help='Plot test pattern (ramp)')                   
 
     args = p.parse_args()
 
@@ -74,60 +89,65 @@ def cmd_tool(args=None):
 
     # define an ADC16 class object and pass it keyword arguments
     s = snap.SnapBoard(args.host, args.katcp_port)
-
-    chip_dict = {
-        'a': 0,
-        'b': 1,
-        'c': 2
-    }
-    s.adc.set_chip_select(('a', 'b', 'c'))
+    
+    if args.pattern_deskew:
+        s.adc.enable_pattern('deskew')
+    #if args.pattern_sync:
+    #    s.adc.enable_pattern('sync')
+    if args.pattern_ramp:
+        s.adc.enable_pattern('ramp')
 
     plt.figure('plot_chans', figsize=(8, 6))
-
-    for chip, chip_num in chip_dict.iteritems():
-
-        snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_num))
-
+    
+    for chip_id in (0,1,2):
+        snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
+        
         if args.demux_mode == 1:
             d1, d2, d3, d4 = demux_data(snapshot, args.demux_mode)
-            plt.subplot(4, 3, 1 + chip_num)
-            plt.ylim([-40, 40])
+            if args.do_fft:
+                d1 = np.fft.rfft(d1)
+                d2 = np.fft.rfft(d2)
+                d3 = np.fft.rfft(d3)
+                d4 = np.fft.rfft(d4)
+            plt.subplot(3, 4, 1 + 4*chip_id)
             plt.plot(d1, c='#cc00cc')
-            plt.title('Input 1 data chip %s' % chip)
-            plt.subplot(4, 3, 2 + chip_num)
-            plt.ylim([-40, 40])
+            plt.title('Input 1 data chip %s' % chip_id)
+            plt.subplot(3, 4, 2 + 4*chip_id)
             plt.plot(d2, c='#00cccc')
-            plt.title('Input 2 data chip %s' % chip)
-            plt.subplot(4, 3, 3 + chip_num)
-            plt.ylim([-40, 40])
+            plt.title('Input 2 data chip %s' % chip_id)
+            plt.subplot(3, 4, 3 + 4*chip_id)
             plt.plot(d3, c='#cccc00')
-            plt.title('Input 3 data chip %s' % chip)
-            plt.subplot(4, 3, 4 + chip_num)
-            plt.ylim([-40, 40])
+            plt.title('Input 3 data chip %s' % chip_id)
+            plt.subplot(3, 4, 4 + 4*chip_id)
             plt.plot(d4, c='#cc0000')
-            plt.title('Input 4 data chip %s' % chip)
-
+            plt.title('Input 4 data chip %s' % chip_id)
+        
         elif args.demux_mode == 2:
             d1, d3 = demux_data(snapshot, args.demux_mode)
-            plt.subplot(2, 3, 1 + chip_num)
-            plt.ylim([-40, 40])
+            if args.do_fft:
+                d1 = np.fft.rfft(d1)
+                d3 = np.fft.rfft(d3)
+            plt.subplot(3, 2, 1 + 2*chip_id)
             plt.plot(d1)
-            plt.title('Input 1 data chip %s' % chip)
-            plt.subplot(2, 3, 2 + chip_num)
-            plt.ylim([-40, 40])
+            plt.title('Input 1 data chip %s' % chip_id)
+            plt.subplot(3, 2, 2 + 2*chip_id)
             plt.plot(d3)
-            plt.title('Input 3 data chip %s' % chip)
-
+            plt.title('Input 3 data chip %s' % chip_id)
+        
         elif args.demux_mode == 4:
             d1 = demux_data(snapshot, args.demux_mode)
-            plt.subplot(1, 3, 2 + chip_num)
-            plt.ylim([-6, 6])
+            if args.do_fft:
+                d1 = np.fft.rfft(d1)
+            plt.subplot(3, 1, 1 + chip_id)
             plt.plot(d1)
-            plt.title('Input 1 data chip %s' % chip)
+            plt.title('Input 1 data chip %s' % chip_id)
         else:
             print('Improper demux mode selected, possible values are 1, 2 and 4')
             exit(1)
-    plt.ylim([-6, 6])
+    
+    # Remember to turn off test pattern
+    s.adc.clear_pattern()
+        
     plt.tight_layout()
     if args.remote_connection:
         plt.savefig('plot.png')
