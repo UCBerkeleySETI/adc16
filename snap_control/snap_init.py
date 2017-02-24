@@ -1,9 +1,10 @@
 import snap
 import logging
+import sys
 
 def cmd_tool(args=None):
     from argparse import ArgumentParser
-    p = ArgumentParser(description='python snap_init.py HOST BOF_FILE [OPTIONS]')
+    p = ArgumentParser(description='snap_init HOST BOF_FILE [OPTIONS]')
     p.add_argument('host', type=str, default='', help='specify the host name')
     p.add_argument('bof', type=str, default='', help='specify the bof file to load unto FPGA')
     p.add_argument('-d', '--demux', dest='demux_mode', type=int, default=2,
@@ -19,8 +20,12 @@ def cmd_tool(args=None):
     p.add_argument('-v', '--verbose', action='store_true', default=False,
                    help='Verbose mode, for debugging.')
                    
-    args = p.parse_args()
-
+    try:
+        args = p.parse_args()
+    except:
+        p.print_help()
+        sys.exit(0)
+    
     # define an ADC16 class object and pass it keyword arguments
     s = snap.SnapBoard(args.host, args.katcp_port, timeout=10)
     

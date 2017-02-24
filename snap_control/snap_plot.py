@@ -1,7 +1,7 @@
 """
-# plot_chans.py
+# snap_plot.py
 
-Plotting scripts for SnapBoard
+Plotting scripts for SnapBoard ADC chip
 
 """
 import snap
@@ -60,8 +60,9 @@ def demux_data(snapshot, demux):
 
 def cmd_tool(args=None):
     from argparse import ArgumentParser
-
-    p = ArgumentParser(description='python plot_chans.py HOST')
+    import sys
+    
+    p = ArgumentParser(description='snap_plot HOST [OPTIONS]')
     p.add_argument('host', type=str, default='', help='specify the host name')
     p.add_argument('-p', '--port', dest='katcp_port', type=int, default=7147,
                    help='KATCP port to connect to (default 7147)')
@@ -77,9 +78,13 @@ def cmd_tool(args=None):
     #               help='Plot test pattern (sync)')
     p.add_argument('-R', '--ramppattern', dest='pattern_ramp', action='store_true', default=False,
                    help='Plot test pattern (ramp)')                   
-
-    args = p.parse_args()
-
+    
+    try:
+        args = p.parse_args()
+    except:
+        p.print_help()
+        sys.exit(0)
+    
     if args.remote_connection:
         import matplotlib
         # see http://matplotlib.org/faq/usage_faq.html#what-is-a-backend
