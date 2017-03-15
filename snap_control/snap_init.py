@@ -32,8 +32,7 @@ def cmd_tool(args=None):
     if args.verbose:
         s.logger.setLevel(logging.DEBUG)
         s.adc.logger.setLevel(logging.DEBUG)
-    
-    if not args.silent:
+    elif not args.silent:
         s.logger.setLevel(logging.INFO)
         s.adc.logger.setLevel(logging.INFO)
     
