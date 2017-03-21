@@ -81,6 +81,15 @@ import logging
 
 katcp_port = 7147
 
+class GenericAdc(object):
+    """ Stand-in for generic ADCs """
+    def __repr__(self):
+        return "<SNAP generic ADC controller on %s>" % self.host.host
+    
+    def __init__(self, host):
+        self.host = host
+        self.logger = logging.getLogger('SnapAdc')
+
 
 class SnapAdc(object):
     """" Controller for HMCAD1511 ADC chip, as used in CASPER SNAP and ROACH2 boards
@@ -103,8 +112,8 @@ class SnapAdc(object):
         self.gain          = 1              # Default to gain of 1
         self.chip_select   = 7              # Default to select all chips
         self.chips = {'a': 0, 'b': 1, 'c': 2}
-        
-        self.logger = logging.getLogger('SnapAdc')
+         
+        self.logger = logging.getLogger(self.host.host + '-adc')
    
     def set_chip_select(self, chips):
         """ Setup which chips will be used in the programmed design
@@ -255,7 +264,6 @@ class SnapAdc(object):
             self.write(0x3b, 0x0202)
         else:
             self.logger.error('demux_mode variable not assigned. Weird.')
-            exit(1)
 
     def enable_pattern(self, pattern):
         """
@@ -549,7 +557,6 @@ class SnapAdc(object):
                 if loop_ctl > 10:
                     self.logger.error(
                         "It appears that bitslipping is not working, make sure you're using the version of Jasper library")
-                    exit(1)
 
     def clock_locked(self):
         """ Check if CLK is locked """
@@ -578,7 +585,6 @@ class SnapAdc(object):
             self.write(0x2b, self.gain * 0x0100)
         else:
             self.logger.error('demux mode is not set')
-            exit(1)
 
     def calibrate(self):
         """" Run calibration routines """
@@ -599,7 +605,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
     Provides monitor and control of a CASPER SNAP board
     """
     def __init__(self, hostname, katcp_port=7147, timeout=10, 
-                 verbose=False, **kwargs):
+                 uses_adc=False, verbose=False, **kwargs):
         super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
         self.katcp_port = katcp_port
 
@@ -614,9 +620,12 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             time.sleep(1e-3)
             if time.time() - t0 > timeout:
                 break
-
+        
+        # If design has an ADC, attach Generic ADC to add logging and basic functionality
+        if uses_adc:
+            self.adc = GenericAdc(self)
+        
         # Check if design has an ADC controller; if so, attach controller as self.adc
-        self.adc = None
         if self.is_connected():
             try:
                 if self.is_adc16_based():
@@ -648,9 +657,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         if self.is_adc16_based():
             self.logger.info("Design is ADC16 based. Calibration routines will run.")
             self.adc = SnapAdc(self)
-            self.adc.set_chip_select(chips)
-            self.adc.set_demux(demux_mode)
-            self.adc.set_gain(gain)
+            self.adc.initialize(chips=chips, gain=gain, demux_mode=demux_mode)
             self.adc.calibrate()
 
     def is_adc16_based(self):
@@ -690,4 +697,3 @@ class SnapBoard(katcp_wrapper.FpgaClient):
             self.write_int('adc16_controller', state, offset=1, blindwrite=True)
         else:
             self.logger.error('Invalid or no demux mode specified')
-            exit(1)
