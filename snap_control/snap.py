@@ -605,7 +605,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
     Provides monitor and control of a CASPER SNAP board
     """
     def __init__(self, hostname, katcp_port=7147, timeout=10, 
-                 uses_adc=False, verbose=False, **kwargs):
+                 uses_adc=True, verbose=False, **kwargs):
         super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
         self.katcp_port = katcp_port
 
@@ -624,7 +624,9 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         # If design has an ADC, attach Generic ADC to add logging and basic functionality
         if uses_adc:
             self.adc = GenericAdc(self)
-        
+        else:
+            self.adc = None
+
         # Check if design has an ADC controller; if so, attach controller as self.adc
         if self.is_connected():
             try:
