@@ -84,6 +84,22 @@ import logging
 from pkg_resources import resource_filename
 ADC_MAP_TXT = resource_filename("snap_control", "adc_register_map.txt")
 
+
+# Notes: 
+# Table 8 from HMCAD1511 spec sheet: Input select
+# -------------------------------------------
+# | inp_sel_adcx <4:0>     | selected input |
+# | 0001 0                 | IN1            |
+# | 0010 0                 | IN2            |
+# | 0100 0                 | IN3            |
+# | 1000 0                 | IN4            |
+# -------------------------------------------
+
+INPUT_MAP  = {1: 0b00010,
+              2: 0b00100,
+              3: 0b01000,
+              4: 0b10000}
+
 def generate_adc_map():
     """ Generate ADC map """
     d = np.genfromtxt(ADC_MAP_TXT, delimiter='|', skip_header=2, dtype='str')
@@ -133,6 +149,7 @@ class SnapAdc(object):
         self.chip_select   = 7              # Default to select all chips
         self.chips = {'a': 0, 'b': 1, 'c': 2}
         self.ADC_MAP = generate_adc_map()
+        self.INPUT_MAP = INPUT_MAP
         
         self.logger = logging.getLogger('SnapAdc')
    
@@ -179,6 +196,18 @@ class SnapAdc(object):
                 self.chip_select = int('0b%i%i%i' % (chip_a, chip_b, chip_c), 2)
     
     def write_register(self, register, value):
+        """ Write register with value 
+        
+        Looks up the hex address and offset of the register, then
+        writes the value with appropriate offsets.
+        
+        Args:
+            register (str): register name
+            value (int/bin/hex): Value to write to register
+        
+        Notes:
+            This will override any other register that shares the hex address.
+        """
         r = self.ADC_MAP[register]
         try:
             assert value <= (2**r.width - 1)
@@ -189,15 +218,35 @@ class SnapAdc(object):
         print hex(r.addr), hex(r_val)
         self.write(r.addr, r_val)
     
-    def write_register_multi(self, registers, values):
-        pass
-    
-    def read_register(self, register):
-        r = self.ADC_MAP[register]
-        d = self.host.read_int('adc16_controller', word_offset=r.addr)
-        print hex(r.addr)
-        return d
-    
+    def write_shared_registers(self, regdict):
+        """ Write multiple registers to one hex address at once.
+        
+        As with write_register, but takes dictionary for multiple registers
+        residing within the same hex address.
+        
+        Args:
+            regdict (dict): Dictionary of register_name : value pairs
+        """
+        hex_addr = None
+        shared_val = 0
+        for regname, regvalue in regdict:
+            r = self.ADC_MAP[regname]
+            if hex_addr is None:
+                hex_addr = r.addr
+            # Make sure all registers are valid and share hex address
+            try:
+                assert hex_addr == r.addr
+            except AssertionError:
+                raise RuntimeError("All registers must reside in same hex address.")
+            try:
+                assert regvalue <= (2**r.width - 1)
+            except AssertionError:
+                raise RuntimeError("Value %i is wider than address width of %i" % (regvalue, r.width))   
+            r_val = regvalue << r.offset
+            shared_val += r_val     # As they're all offset you can just add 'em together
+        
+        self.write(r.addr, r_val)
+            
     def write(self, addr, data):
         """
         # write_adc is used for writing specific ADC registers.
@@ -279,51 +328,78 @@ class SnapAdc(object):
         Args:
             demux_mode (int): Set demulitplexing to 1 (no interleave), 2 or 4 (interleave all)
         
-        Notes: 
-        Table 8 from HMCAD1511 spec sheet: Input select
-        -------------------------------------------
-        | inp_sel_adcx <4:0>     | selected input |
-        | 0001 0                 | IN1            |
-        | 0010 0                 | IN2            |
-        | 0100 0                 | IN3            |
-        | 1000 0                 | IN4            |
-        -------------------------------------------
         """
         self.demux_mode = demux_mode
         if self.demux_mode == 1:
-            # Setting number of channes to 4
-            self.write_register('channel_num', 4)
-            # Route inputs to respective ADC's for demux 1
             self.logger.info('Routing all four inputs to corresponding ADC channels')
-            self.write_register('inp_sel_adc1', 0b00010)
-            self.write_register('inp_sel_adc2', 0b00100)
-            self.write_register('inp_sel_adc3', 0b01000)
-            self.write_register('inp_sel_adc4', 0b10000)
+            self.write_register('channel_num', 4)
+            self.set_input1(1, 2, 3, 4)
 
         elif self.demux_mode == 2:
-            # Setting number of channels to 2
-            self.write_register('channel_num', 2)
-            # Routing input 1 and input 3 to ADC for interleaving
             self.logger.info('Setting ADC to interleave inputs 1 (ADC0) and 3 (ADC2)')
-            # Selecting input 1
-            self.write_register('inp_sel_adc1', 0b00010)
-            self.write_register('inp_sel_adc2', 0b00010)
-            # Selecting input 3
-            self.write_register('inp_sel_adc3', 0b01000)
-            self.write_register('inp_sel_adc4', 0b01000)
+            self.write_register('channel_num', 2)
+            self.set_input2(1, 3)
+            
         elif self.demux_mode == 4:
-            # Setting the number of channels to 1
-            self.write_register('channel_num', 1)
             self.logger.info('Setting ADC to interleave input (ADC0)')
-            # Selecting input 1
-            self.write_register('inp_sel_adc1', 0b00010)
-            self.write_register('inp_sel_adc2', 0b00010)
-            self.write_register('inp_sel_adc3', 0b00010)
-            self.write_register('inp_sel_adc4', 0b00010)
+            self.write_register('channel_num', 1)
+            self.set_input4(1)
+            
         else:
             self.logger.error('demux_mode variable not assigned. Weird.')
             raise RuntimeError('Demux mode variable not assigned. Weird.')
+    
+    def set_input4(self, input_id):
+        """ Set input for demux mode 4 """
+        ip = self.INPUT_MAP[input_id]
+        self.write_shared_registers({'inp_sel_adc1': ip,
+                                     'inp_sel_adc2': ip})
+        self.write_shared_registers({'inp_sel_adc3': ip,
+                                     'inp_sel_adc4': ip})
 
+    def set_input2(self, input_id1, input_id2):
+        """ Set input for demux mode 2 """
+        ip1 = self.INPUT_MAP[input_id1]
+        ip2 = self.INPUT_MAP[input_id2]
+        self.write_shared_registers({'inp_sel_adc1': ip1,
+                                     'inp_sel_adc2': ip1})
+        self.write_shared_registers({'inp_sel_adc3': ip2,
+                                     'inp_sel_adc4': ip2})
+
+    def set_input1(self, input_id1, input_id2, input_id3, input_id4):
+        """ Set input for demux mode 1 """
+        ip1 = self.INPUT_MAP[input_id1]
+        ip2 = self.INPUT_MAP[input_id2]
+        ip3 = self.INPUT_MAP[input_id3]
+        ip4 = self.INPUT_MAP[input_id4]
+        
+        self.write_shared_registers({'inp_sel_adc1': ip1,
+                                     'inp_sel_adc2': ip2})
+        self.write_shared_registers({'inp_sel_adc3': ip3,
+                                     'inp_sel_adc4': ip4})
+    
+    def set_adc_inputs(self, *args):
+        """ Set input routing for ADC chips 
+        
+        Args: integer ids (1,2,3,4) for ADC mapping
+        
+        Notes:
+            Wrapper for set_input1/2/4 functions.
+            Example: set_adc_inputs(3,2,1,4)
+        """
+        try:
+            assert len(args) == self.demux_mode
+        except AssertionError:
+            raise RuntimeError("Num. of inputs (%i) must match demux mode (%i)" % (len(args), self.demux_mode))
+        if len(args) == 1:
+            set_input1(args[0])
+        elif len(args) == 2:
+            set_input2(args[0], args[1])
+        elif len(args) == 4:
+            set_input4(args[0], args[1], args[2]. args[3])
+        else:
+            raise RuntimeError("Num. inputs (%i) must be 1, 2, or 4." % (len(args)))
+    
     def enable_pattern(self, pattern):
         """
 
@@ -373,6 +449,11 @@ class SnapAdc(object):
             self.logger.error('Invalid test pattern selected')
             raise RuntimeError('Invalid test pattern selected')
         time.sleep(1)
+
+    def clear_pattern(self):
+        """ Clears test pattern from ADCs """
+        self.write('en_ramp',   0b000)
+        self.write('pat_deskew', 0b00)
 
     def read_ram(self, device):
         SNAP_REQ = 0x00010000
@@ -641,26 +722,7 @@ class SnapAdc(object):
             self.logger.error('ADC clock not locked, check your clock source/correctly set demux mode')
             raise RuntimeError('ADC clock not locked, check your clock source/correctly set demux mode')
 
-    def clear_pattern(self):
-        """ Clears test pattern from ADCs 
-        
-                            --------------
-         0x25 ADDR          | D6  D5  D4 |
-        ----------------------------------
-        | en_ramp           |  X   0   0 |
-        | dual_custom_pat   |  0   X   0 |
-        | single_custom_pat |  0   0   X |
-        ----------------------------------
-        
-                            ----------
-        0x45 ADDR           | D0  D1 |
-        -------------------------------
-        | pat_deskew        | 0   X  |
-        | pat_sync          | X   0  |
-        ------------------------------
-        """
-        self.write('en_ramp',   0b000)
-        self.write('pat_deskew', 0b00)
+
 
     def set_gain(self, gain):
         """ Set gain value on ADCs"""
@@ -794,6 +856,10 @@ class SnapBoard(casperfpga.KatcpFpga):
         Args:
             boffile (str): Name of boffile to program
             gain (int): ADC gain, from 1-32 (1, 2, 4, 8 recommended)
+        
+        Notes:
+            Overwrites the casperfpga program method, which has been reproduced
+            as _program
 
         """
         # Make a dictionary out of chips specified on command line.
