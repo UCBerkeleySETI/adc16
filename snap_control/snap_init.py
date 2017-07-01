@@ -28,6 +28,7 @@ def cmd_tool(args=None):
     
     # define an ADC16 class object and pass it keyword arguments
     s = snap.SnapBoard(args.host, args.katcp_port, timeout=10)
+    s.adc = SnapAdc(s)    
     
     if args.verbose:
         s.logger.setLevel(logging.DEBUG)

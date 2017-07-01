@@ -1,0 +1,36 @@
+  register_name     | hex_address | width | offset | description
+----------------------------------------------------------------------------------------------------------------
+rst                 | 0x00        | 1     | 0      | Self-clearing software reset
+sleep               | 0x0F        | 1     | 8      | Go to sleep mode
+pd                  | 0x0F        | 1     | 9      | Power down
+en_ramp             | 0x24        | 3     | 4      | [X00] Enable repeating full-scale ramp test pattern
+dual_custom_pat     | 0x24        | 3     | 4      | [0X0] Enable mode where output toggles between two defined codes
+single_custom_pat   | 0x24        | 3     | 4      | [00X] Enable mode wherein output is constant specific code
+bits_custom1        | 0x26        | 8     | 8      | Bits for the single custom pattern or first dual pattern
+bits_custom2        | 0x27        | 8     | 8      | Bits for the second dual pattern
+cgain4_ch1          | 0x2A        | 4     | 0      | Programmable coarse gain channel 1 when in quad chan setup
+cgain4_ch2          | 0x2A        | 4     | 4      | Programmable coarse gain channel 2 when in quad chan setup
+cgain4_ch3          | 0x2A        | 4     | 8      | Programmable coarse gain channel 3 when in quad chan setup
+cgain4_ch4          | 0x2A        | 4     | 12     | Programmable coarse gain channel 4 when in quad chan setup
+cgain2_ch1          | 0x2B        | 4     | 0      | Programmable coarse gain channel 1 in dual channel setup
+cgain2_ch2          | 0x2B        | 4     | 4      | Programmable coarse gain channel 2 in dual channel setup
+cgain1_ch1          | 0x2B        | 4     | 8      | Programmable coarse gain in single channel setup
+jitter_ctrl         | 0x30        | 8     | 0      | Clock jitter adjustment.
+channel_num         | 0x31        | 3     | 0      | Set number of channels: 1, 2 or 4
+clk_divide          | 0x31        | 2     | 8      | Define clock divider factor: 1, 2, 4 or 8
+coarse_gain_cfg     | 0x33        | 1     | 0      | Configures the coarse gain setting
+fine_gain_en        | 0x33        | 1     | 1      | Enable use of fine gain
+fgain_branch1       | 0x34        | 7     | 0      | Programmable fine gain for branch1.
+fgain_branch2       | 0x34        | 7     | 8      | Programmable fine gain for branch2.
+fgain_branch3       | 0x35        | 7     | 0      | Programmable fine gain for branch3.
+fgain_branch4       | 0x35        | 7     | 8      | Programmable fine gain for branch4.
+fgain_branch5       | 0x36        | 7     | 0      | Programmable fine gain for branch5.
+fgain_branch6       | 0x36        | 7     | 8      | Programmable fine gain for branch6.
+fgain_branch7       | 0x37        | 7     | 0      | Programmable fine gain for branch7.
+fgain_branch8       | 0x37        | 7     | 8      | Programmable fine gain for branch8.
+inp_sel_adc1        | 0x3A        | 5     | 0      | [XXXX0] Input select for adc 1.
+inp_sel_adc2        | 0x3A        | 5     | 8      | [XXXX0] Input select for adc 2.
+inp_sel_adc3        | 0x3B        | 5     | 0      | [XXXX0] Input select for adc 3.
+inp_sel_adc4        | 0x3B        | 5     | 8      | [XXXX0] Input select for adc 4.
+pat_deskew          | 0x45        | 2     | 0      | [OX] Enable deskew pattern mode
+pat_sync            | 0x45        | 2     | 0      | [X0] Enable sync pattern mode

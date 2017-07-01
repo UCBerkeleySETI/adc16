@@ -75,9 +75,38 @@ this class, there may be occasion to access the ADC16 controller directly
 
 import time
 from . import katcp_wrapper
+import casperfpga
 import numpy as np
 import struct
 import logging
+
+# Load ADC map
+from pkg_resources import resource_filename
+ADC_MAP_TXT = resource_filename("snap_control", "adc_register_map.txt")
+
+def generate_adc_map():
+    """ Generate ADC map """
+    d = np.genfromtxt(ADC_MAP_TXT, delimiter='|', skip_header=2, dtype='str')
+    ADC_MAP = {}
+
+    class AdcRegister(object):
+        def __init__(self, name, hex_addr, width, offset, description):
+            self.name   = name.strip()
+            if isinstance(hex_addr, int):
+                self.addr   = hex_addr
+            else:
+                self.addr   = int(hex_addr, 16)
+            self.width  = int(width)
+            self.offset = int(offset)
+            self.description = description.strip()
+    
+        def __repr__(self):
+            return "<AdcRegister: %s>" % self.name
+
+    for name, hex_addr, width, offset, description in d:
+        ADC_MAP[name.strip()] = AdcRegister(name, hex_addr, width, offset, description)
+    
+    return ADC_MAP
 
 katcp_port = 7147
 
@@ -103,6 +132,7 @@ class SnapAdc(object):
         self.gain          = 1              # Default to gain of 1
         self.chip_select   = 7              # Default to select all chips
         self.chips = {'a': 0, 'b': 1, 'c': 2}
+        self.ADC_MAP = generate_adc_map()
         
         self.logger = logging.getLogger('SnapAdc')
    
@@ -147,7 +177,27 @@ class SnapAdc(object):
                     chip_c = 1
                     self.chips['c'] = 2
                 self.chip_select = int('0b%i%i%i' % (chip_a, chip_b, chip_c), 2)
-
+    
+    def write_register(self, register, value):
+        r = self.ADC_MAP[register]
+        try:
+            assert value <= (2**r.width - 1)
+        except AssertionError:
+            raise RuntimeError("Value %i is wider than address width of %i" % (value, r.width))
+            
+        r_val = value << r.offset
+        print hex(r.addr), hex(r_val)
+        self.write(r.addr, r_val)
+    
+    def write_register_multi(self, registers, values):
+        pass
+    
+    def read_register(self, register):
+        r = self.ADC_MAP[register]
+        d = self.host.read_int('adc16_controller', word_offset=r.addr)
+        print hex(r.addr)
+        return d
+    
     def write(self, addr, data):
         """
         # write_adc is used for writing specific ADC registers.
@@ -157,30 +207,30 @@ class SnapAdc(object):
         CS = self.chip_select
         IDLE = SCLK
         SDA_SHIFT = 8
-        self.host.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
+        self.host.write_int('adc16_controller', IDLE, word_offset=0, blindwrite=True)
         for i in range(8):
             addr_bit = (addr >> (8 - i - 1)) & 1
             state = (addr_bit << SDA_SHIFT) | CS
-            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
-            self.logger.debug("Printing address state written to adc16_controller, offset=0, clock low")
+            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
             self.logger.debug(np.binary_repr(state, width=32))
             state = (addr_bit << SDA_SHIFT) | CS | SCLK
-            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
-            self.logger.debug("Printing address state written to adc16_controller, offset=0, clock high")
+            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
             self.logger.debug(np.binary_repr(state, width=32))
 
         for j in range(16):
             data_bit = (data >> (16 - j - 1)) & 1
             state = (data_bit << SDA_SHIFT) | CS
-            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
-            self.logger.debug("Printing data state written to adc16_controller, offset=0, clock low")
+            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
             self.logger.debug(np.binary_repr(state, width=32))
             state = (data_bit << SDA_SHIFT) | CS | SCLK
-            self.host.write_int('adc16_controller', state, offset=0, blindwrite=True)
-            self.logger.debug("Printing data address state written to adc16_controller, offset=0, clock high")
+            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
             self.logger.debug(np.binary_repr(state, width=32))
 
-        self.host.write_int('adc16_controller', IDLE, offset=0, blindwrite=True)
+        self.host.write_int('adc16_controller', IDLE, word_offset=0, blindwrite=True)
 
     def power_cycle(self):
         """ Power cycle the ADC """
@@ -191,18 +241,18 @@ class SnapAdc(object):
     def power_off(self):
         """ Turn power to ADC off """
         self.logger.info('Power ADC down')
-        self.write(0x0f, 0x0200)
+        self.write_register('pd', 1)
     
     def power_on(self):
         """ Turn power to ADC on """
         self.logger.info('Power ADC up')
-        self.write(0x0f, 0x0000)        
+        self.write_register('pd', 0)     
     
     def reset(self):
         """ Reset the ADC """
         self.logger.info('Initializing ADC')
         # reset adc
-        self.write(0x00, 0x0001)
+        self.write_register('rst', 1)
 
     def initialize(self, chips='all', demux_mode=1, gain=1):
         """ Initialize the ADC
@@ -228,34 +278,51 @@ class SnapAdc(object):
 
         Args:
             demux_mode (int): Set demulitplexing to 1 (no interleave), 2 or 4 (interleave all)
+        
+        Notes: 
+        Table 8 from HMCAD1511 spec sheet: Input select
+        -------------------------------------------
+        | inp_sel_adcx <4:0>     | selected input |
+        | 0001 0                 | IN1            |
+        | 0010 0                 | IN2            |
+        | 0100 0                 | IN3            |
+        | 1000 0                 | IN4            |
+        -------------------------------------------
         """
         self.demux_mode = demux_mode
         if self.demux_mode == 1:
             # Setting number of channes to 4
-            self.write(0x31, 0x04)
+            self.write_register('channel_num', 4)
             # Route inputs to respective ADC's for demux 1
             self.logger.info('Routing all four inputs to corresponding ADC channels')
-            self.write(0x3a, 0x0402)
-            self.write(0x3b, 0x1008)
+            self.write_register('inp_sel_adc1', 0b00010)
+            self.write_register('inp_sel_adc2', 0b00100)
+            self.write_register('inp_sel_adc3', 0b01000)
+            self.write_register('inp_sel_adc4', 0b10000)
+
         elif self.demux_mode == 2:
             # Setting number of channels to 2
-            self.write(0x31, 0x02)
+            self.write_register('channel_num', 2)
             # Routing input 1 and input 3 to ADC for interleaving
             self.logger.info('Setting ADC to interleave inputs 1 (ADC0) and 3 (ADC2)')
             # Selecting input 1
-            self.write(0x3a, 0x0202)
+            self.write_register('inp_sel_adc1', 0b00010)
+            self.write_register('inp_sel_adc2', 0b00010)
             # Selecting input 3
-            self.write(0x3b, 0x0808)
+            self.write_register('inp_sel_adc3', 0b01000)
+            self.write_register('inp_sel_adc4', 0b01000)
         elif self.demux_mode == 4:
             # Setting the number of channels to 1
-            self.write(0x31, 0x01)
+            self.write_register('channel_num', 1)
             self.logger.info('Setting ADC to interleave input (ADC0)')
             # Selecting input 1
-            self.write(0x3a, 0x0202)
-            self.write(0x3b, 0x0202)
+            self.write_register('inp_sel_adc1', 0b00010)
+            self.write_register('inp_sel_adc2', 0b00010)
+            self.write_register('inp_sel_adc3', 0b00010)
+            self.write_register('inp_sel_adc4', 0b00010)
         else:
             self.logger.error('demux_mode variable not assigned. Weird.')
-            exit(1)
+            raise RuntimeError('Demux mode variable not assigned. Weird.')
 
     def enable_pattern(self, pattern):
         """
@@ -278,32 +345,44 @@ class SnapAdc(object):
 
              Default is :ramp.  Any value other than shown above is the same as :none
              (i.e. pass through sampled data)
+        
+                            --------------
+         0x25 ADDR          | D6  D5  D4 |
+        ----------------------------------
+        | en_ramp           |  X   0   0 |
+        | dual_custom_pat   |  0   X   0 |
+        | single_custom_pat |  0   0   X |
+        ----------------------------------
+        
+                            ----------
+        0x45 ADDR           | D0  D1 |
+        -------------------------------
+        | pat_deskew        | 0   X  |
+        | pat_sync          | X   0  |
+        ------------------------------
         """
-        self.write(0x25, 0x00)
-        self.write(0x45, 0x00)
+        self.write_register('en_ramp',    0b000)
+        self.write_register('pat_deskew', 0b000)
         if pattern == 'ramp':
-            self.write(0x25, 0x0040)
+            self.write_register('en_ramp', 0b100)
         elif pattern == 'deskew':
-            self.write(0x45, 0x0001)
+            self.write_register('pat_deskew', 0b01)
         elif pattern == 'sync':
-            self.write(0x45, 0x0002)
+            self.write_register('pat_sync', 0b10)
         else:
             self.logger.error('Invalid test pattern selected')
-            exit(1)
-        # else:
-        #			self.write_adc(0x25,0x10)
-        #			self.write_adc(0x26,(self.expected)<<8)
+            raise RuntimeError('Invalid test pattern selected')
         time.sleep(1)
 
     def read_ram(self, device):
         SNAP_REQ = 0x00010000
-        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', SNAP_REQ, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', SNAP_REQ, word_offset=1, blindwrite=True)
         # Read the device that is passed to the read_ram method,1024 elements at a time,
         # snapshot is a binary string that needs to get unpacked
         # Part of the read request is the size parameter,1024, which specifies the
         # amount of bytes to read form the device
-        snapshot = self.host.read(device, 1024, offset=0)
+        snapshot = self.host.read(device, 1024, word_offset=0)
 
         # struct unpack returns a tuple of signed int values.
         # Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking
@@ -336,13 +415,13 @@ class SnapAdc(object):
         chip_shift = 8
         chip_select_bs = 1 << chip_shift + chip_num
         state = (chip_select_bs | chan_select_bs)
-        #		print('Bitslip state written to offset=1:',bin(state))
-        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', state, offset=1, blindwrite=True)
-        #	regvalue=self.read('adc16_controller', 32, offset=1)
+        #		print('Bitslip state written to word_offset=1:',bin(state))
+        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', state, word_offset=1, blindwrite=True)
+        #	regvalue=self.read('adc16_controller', 32, word_offset=1)
         #	print('Bitslip Reg Value\n')
         #	print(struct.unpack('>32b', regvalue))
-        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
 
     def delay_tap(self, tap, channel, chip_num):
         
@@ -350,17 +429,17 @@ class SnapAdc(object):
 
         if channel == 'all':
             chan_select = (0xf << (chip_num * 4))
-            self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
             # Set tap bits
-            self.host.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
+            self.host.write_int('adc16_controller', delay_tap_mask & tap, word_offset=1, blindwrite=True)
             # Set strobe bits
-            self.host.write_int('adc16_controller', chan_select, offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', chan_select, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', chan_select, word_offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', chan_select, word_offset=3, blindwrite=True)
             # Clear all bits
-            self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
+            self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
             # Note this return statement, after all channels have been bitslip it'll exit out of the function.
             # the function is called again after figuring out the best tap with a single channel argument.
             return
@@ -389,15 +468,15 @@ class SnapAdc(object):
             chan_select = 0x8 << (chip_num * 4)
             lane_offset = 3
 
-        self.host.write_int('adc16_controller', 0, offset=lane_offset, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=lane_offset, blindwrite=True)
         # Set tap bits
-        self.host.write_int('adc16_controller', delay_tap_mask & tap, offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', delay_tap_mask & tap, word_offset=1, blindwrite=True)
         # Set strobe bits
-        self.host.write_int('adc16_controller', chan_select, offset=lane_offset, blindwrite=True)
+        self.host.write_int('adc16_controller', chan_select, word_offset=lane_offset, blindwrite=True)
         # Clear all bits
-        self.host.write_int('adc16_controller', 0, offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', 0, offset=2, blindwrite=True)
-        self.host.write_int('adc16_controller', 0, offset=3, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
+        self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
 
 
     def test_tap(self, chip_num, taps):
@@ -549,11 +628,11 @@ class SnapAdc(object):
                 if loop_ctl > 10:
                     self.logger.error(
                         "It appears that bitslipping is not working, make sure you're using the version of Jasper library")
-                    exit(1)
+                    raise RuntimeError("bitslipping is not working. Are you using the latest Jasper libraries?"))
 
     def clock_locked(self):
         """ Check if CLK is locked """
-        locked_bit = self.host.read_int('adc16_controller', offset=0) >> 24
+        locked_bit = self.host.read_int('adc16_controller', word_offset=0) >> 24
         if locked_bit & 3:
             self.logger.info('ADC clock is locked!!!')
             self.logger.info('Board clock: %2.4f MHz' % self.host.est_brd_clk())
@@ -563,9 +642,25 @@ class SnapAdc(object):
             raise RuntimeError('ADC clock not locked, check your clock source/correctly set demux mode')
 
     def clear_pattern(self):
-        """Clears test pattern from ADCs"""
-        self.write(0x25, 0x00)
-        self.write(0x45, 0x00)
+        """ Clears test pattern from ADCs 
+        
+                            --------------
+         0x25 ADDR          | D6  D5  D4 |
+        ----------------------------------
+        | en_ramp           |  X   0   0 |
+        | dual_custom_pat   |  0   X   0 |
+        | single_custom_pat |  0   0   X |
+        ----------------------------------
+        
+                            ----------
+        0x45 ADDR           | D0  D1 |
+        -------------------------------
+        | pat_deskew        | 0   X  |
+        | pat_sync          | X   0  |
+        ------------------------------
+        """
+        self.write('en_ramp',   0b000)
+        self.write('pat_deskew', 0b00)
 
     def set_gain(self, gain):
         """ Set gain value on ADCs"""
@@ -578,7 +673,7 @@ class SnapAdc(object):
             self.write(0x2b, self.gain * 0x0100)
         else:
             self.logger.error('demux mode is not set')
-            exit(1)
+            raise RuntimeError("Demux Mode is not set")
 
     def calibrate(self):
         """" Run calibration routines """
@@ -593,7 +688,7 @@ class SnapAdc(object):
         self.host.fpga_set_demux(self.demux_mode)
 
 
-class SnapBoard(katcp_wrapper.FpgaClient):
+class SnapBoard(casperfpga.KatcpFpga):
     """ Controller for a CASPER SNAP board.
 
     Provides monitor and control of a CASPER SNAP board
@@ -630,6 +725,67 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
         return "<SnapBoard host: %s port: %s>" % (self.host, self.katcp_port)
 
+    def _program(self, filename=None):
+        """
+        Program the FPGA with the specified binary file.
+        :param filename: name of file to program, can vary depending on the formats
+                         supported by the device. e.g. fpg, bof, bin
+        :return:
+        """
+        # TODO - The logic here is for broken TCPBORPHSERVER - needs to be fixed.
+        if 'program_filename' in self.system_info.keys():
+            if filename is None:
+                filename = self.system_info['program_filename']
+            elif filename != self.system_info['program_filename']:
+                self.logger.error('%s: programming filename %s, configured '
+                             'programming filename %s' %
+                             (self.host, filename,
+                              self.system_info['program_filename']))
+                # This doesn't seem as though it should really be an error...
+        if filename is None:
+            self.logger.error('%s: cannot program with no filename given. '
+                         'Exiting.' % self.host)
+            raise RuntimeError('Cannot program with no filename given. '
+                               'Exiting.')
+
+        unhandled_informs = []
+
+        # set the unhandled informs callback
+        self.unhandled_inform_handler = \
+            lambda msg: unhandled_informs.append(msg)
+        reply, _ = self.katcprequest(name='progdev', request_timeout=10,
+                                     request_args=(filename, ))
+        self.unhandled_inform_handler = None
+        if reply.arguments[0] == 'ok':
+            complete_okay = False
+            for inf in unhandled_informs:
+                if (inf.name == 'fpga') and (inf.arguments[0] == 'ready'):
+                    complete_okay = True
+            if not complete_okay: # Modify to do an extra check
+                reply, _ = self.katcprequest(name='status', request_timeout=1)
+                # Not sure whether 1 second is a good timeout here
+                if reply.arguments[0] == 'ok':
+                    complete_okay = True
+                else:
+                    self.logger.error('%s: programming %s failed.' %
+                                 (self.host, filename))
+                    for inf in unhandled_informs:
+                        LOGGER.debug(inf)
+                    raise RuntimeError('%s: programming %s failed.' %
+                                       (self.host, filename))
+            self.system_info['last_programmed'] = filename
+        else:
+            self.logger.error('%s: progdev request %s failed.' %
+                         (self.host, filename))
+            raise RuntimeError('%s: progdev request %s failed.' %
+                               (self.host, filename))
+        if filename[-3:] == 'fpg':
+            self.get_system_information()
+        else:
+            self.logger.info('%s: %s is not an fpg file, could not parse '
+                        'system information.' % (self.host, filename))
+        self.logger.info('%s: programmed %s okay.' % (self.host, filename))
+
     def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
         """ Reprogram the FPGA with a given boffile AND calibrates
 
@@ -643,7 +799,7 @@ class SnapBoard(katcp_wrapper.FpgaClient):
         # Make a dictionary out of chips specified on command line.
         # mapping chip letters to numbers to facilitate writing to adc16_controller
         self.logger.info("Programming with %s" % boffile)
-        self.progdev(boffile)
+        self._program(boffile)
 
         if self.is_adc16_based():
             self.logger.info("Design is ADC16 based. Calibration routines will run.")
@@ -678,16 +834,16 @@ class SnapBoard(katcp_wrapper.FpgaClient):
 
         if fpga_demux == 1:
             state = (4 + 0) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+            self.write_int('adc16_controller', state, word_offset=1, blindwrite=True)
         elif fpga_demux == 2:
             # writing the WW enable bit(4) as well as the demux setting bit(1 for demux mode 2
             # as seen in the adc16_controller memory map)
             state = (4 + 1) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+            self.write_int('adc16_controller', state, word_offset=1, blindwrite=True)
 
         elif fpga_demux == 4:
             state = (4 + 2) << demux_shift
-            self.write_int('adc16_controller', state, offset=1, blindwrite=True)
+            self.write_int('adc16_controller', state, word_offset=1, blindwrite=True)
         else:
             self.logger.error('Invalid or no demux mode specified')
-            exit(1)
+            raise RuntimeError('Invalid or no demux mode specified')
