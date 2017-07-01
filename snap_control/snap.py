@@ -126,6 +126,14 @@ def generate_adc_map():
 
 katcp_port = 7147
 
+class GenericAdc(object):
+    """ Stand-in for generic ADCs """
+    def __repr__(self):
+        return "<SNAP generic ADC controller on %s>" % self.host.host
+    
+    def __init__(self, host):
+        self.host = host
+        self.logger = logging.getLogger('SnapAdc')
 
 class SnapAdc(object):
     """" Controller for HMCAD1511 ADC chip, as used in CASPER SNAP and ROACH2 boards
@@ -215,7 +223,6 @@ class SnapAdc(object):
             raise RuntimeError("Value %i is wider than address width of %i" % (value, r.width))
             
         r_val = value << r.offset
-        print hex(r.addr), hex(r_val)
         self.write(r.addr, r_val)
     
     def write_shared_registers(self, regdict):
@@ -229,7 +236,7 @@ class SnapAdc(object):
         """
         hex_addr = None
         shared_val = 0
-        for regname, regvalue in regdict:
+        for regname, regvalue in regdict.items():
             r = self.ADC_MAP[regname]
             if hex_addr is None:
                 hex_addr = r.addr
@@ -245,13 +252,15 @@ class SnapAdc(object):
             r_val = regvalue << r.offset
             shared_val += r_val     # As they're all offset you can just add 'em together
         
-        self.write(r.addr, r_val)
+        self.write(r.addr, shared_val)
             
     def write(self, addr, data):
         """
         # write_adc is used for writing specific ADC registers.
         # ADC controller can only write to adc one bit at a time at rising clock edge
         """
+        self.logger.debug("WRITING ADDR: %s VAL: %s" % (hex(addr), hex(data)))
+        
         SCLK = 0x200
         CS = self.chip_select
         IDLE = SCLK
@@ -387,16 +396,15 @@ class SnapAdc(object):
             Wrapper for set_input1/2/4 functions.
             Example: set_adc_inputs(3,2,1,4)
         """
-        try:
-            assert len(args) == self.demux_mode
-        except AssertionError:
-            raise RuntimeError("Num. of inputs (%i) must match demux mode (%i)" % (len(args), self.demux_mode))
         if len(args) == 1:
-            set_input1(args[0])
+            self.set_demux(4)
+            self.set_input4(args[0])
         elif len(args) == 2:
-            set_input2(args[0], args[1])
+            self.set_demux(2)
+            self.set_input2(args[0], args[1])
         elif len(args) == 4:
-            set_input4(args[0], args[1], args[2]. args[3])
+            self.set_demux(1)
+            self.set_input1(args[0], args[1], args[2], args[3])
         else:
             raise RuntimeError("Num. inputs (%i) must be 1, 2, or 4." % (len(args)))
     
@@ -709,7 +717,7 @@ class SnapAdc(object):
                 if loop_ctl > 10:
                     self.logger.error(
                         "It appears that bitslipping is not working, make sure you're using the version of Jasper library")
-                    raise RuntimeError("bitslipping is not working. Are you using the latest Jasper libraries?"))
+                    raise RuntimeError("bitslipping is not working. Are you using the latest Jasper libraries?")
 
     def clock_locked(self):
         """ Check if CLK is locked """
@@ -756,7 +764,7 @@ class SnapBoard(casperfpga.KatcpFpga):
     Provides monitor and control of a CASPER SNAP board
     """
     def __init__(self, hostname, katcp_port=7147, timeout=10, 
-                 verbose=False, **kwargs):
+                 uses_adc=True, verbose=False, **kwargs):
         super(SnapBoard, self).__init__(hostname, katcp_port, timeout)
         self.katcp_port = katcp_port
 
@@ -771,16 +779,19 @@ class SnapBoard(casperfpga.KatcpFpga):
             time.sleep(1e-3)
             if time.time() - t0 > timeout:
                 break
-
+                
         # Check if design has an ADC controller; if so, attach controller as self.adc
         self.adc = None
+        # If design has an ADC, attach Generic ADC to add logging and basic functionality
+        if uses_adc:
+            self.adc = GenericAdc(self)
+            
         if self.is_connected():
             try:
                 if self.is_adc16_based():
                     self.adc = SnapAdc(self)
             except RuntimeError:
                 pass
-        
         self.logger = logging.getLogger('SnapBoard')
 
     def __repr__(self):
