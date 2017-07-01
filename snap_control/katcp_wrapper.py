@@ -83,7 +83,7 @@ class FpgaClient(CallbackClient):
         super(FpgaClient, self).__init__(host, port, tb_limit = tb_limit, timeout = timeout, logger = logger)
         self.host = host
         self._timeout = timeout
-        self.start()#daemon = True)
+        self.start(daemon = True)
 
         # async stuff
         self._nb_request_id_lock = threading.Lock()
