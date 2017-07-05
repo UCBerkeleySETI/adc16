@@ -3,9 +3,9 @@
 rst                 | 0x00        | 1     | 0      | Self-clearing software reset
 sleep               | 0x0F        | 1     | 8      | Go to sleep mode
 pd                  | 0x0F        | 1     | 9      | Power down
-en_ramp             | 0x24        | 3     | 4      | [X00] Enable repeating full-scale ramp test pattern
-dual_custom_pat     | 0x24        | 3     | 4      | [0X0] Enable mode where output toggles between two defined codes
-single_custom_pat   | 0x24        | 3     | 4      | [00X] Enable mode wherein output is constant specific code
+en_ramp             | 0x25        | 3     | 4      | [X00] Enable repeating full-scale ramp test pattern
+dual_custom_pat     | 0x25        | 3     | 4      | [0X0] Enable mode where output toggles between two defined codes
+single_custom_pat   | 0x25        | 3     | 4      | [00X] Enable mode wherein output is constant specific code
 bits_custom1        | 0x26        | 8     | 8      | Bits for the single custom pattern or first dual pattern
 bits_custom2        | 0x27        | 8     | 8      | Bits for the second dual pattern
 cgain4_ch1          | 0x2A        | 4     | 0      | Programmable coarse gain channel 1 when in quad chan setup
