@@ -213,6 +213,8 @@ class SnapBoard(casperfpga.KatcpFpga):
             self.adc.set_gain(gain)
             self.adc.power_cycle()
             self.adc.calibrate()
+        self.logger.info("Programming complete.")
+        return
 
     def set_debug(self):
         """ Set logger levels to output debug info """

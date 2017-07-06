@@ -681,7 +681,7 @@ class SnapAdc(object):
         self.walk_taps()
         # Clear pattern setting registers so real data could be taken
         self.clear_pattern()
-        self.logger.info('Setting fpga demux to %i' % self.demux_mode)
+        self.host.logger.info('Setting fpga demux to %i' % self.demux_mode)
         self.host.fpga_set_demux(self.demux_mode)
 
 
