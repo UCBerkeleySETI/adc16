@@ -32,5 +32,9 @@ inp_sel_adc1        | 0x3A        | 5     | 0      | [XXXX0] Input select for ad
 inp_sel_adc2        | 0x3A        | 5     | 8      | [XXXX0] Input select for adc 2.
 inp_sel_adc3        | 0x3B        | 5     | 0      | [XXXX0] Input select for adc 3.
 inp_sel_adc4        | 0x3B        | 5     | 8      | [XXXX0] Input select for adc 4.
+phase_ddr           | 0x42        | 2     | 5      | Controls the phase of the LCLK output relative to data
 pat_deskew          | 0x45        | 2     | 0      | [OX] Enable deskew pattern mode
 pat_sync            | 0x45        | 2     | 0      | [X0] Enable sync pattern mode
+adc_curr            | 0x50        | 3     | 0      | ADC Current scaling
+ext_vcm_bc          | 0x50        | 2     | 5      | VCM buffer driving strength control
+

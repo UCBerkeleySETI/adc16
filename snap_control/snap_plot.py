@@ -4,7 +4,7 @@
 Plotting scripts for SnapBoard ADC chip
 
 """
-import snap
+import snap_board
 import os
 import numpy as np
 
@@ -93,7 +93,7 @@ def cmd_tool(args=None):
     import matplotlib.pyplot as plt
 
     # define an ADC16 class object and pass it keyword arguments
-    s = snap.SnapBoard(args.host, args.katcp_port)
+    s = snap_board.SnapBoard(args.host, args.katcp_port)
     
     if args.pattern_deskew:
         s.adc.enable_pattern('deskew')

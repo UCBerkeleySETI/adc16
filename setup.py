@@ -3,8 +3,9 @@
 setup.py -- setup script for fits2hdf package
 """
 from setuptools import setup, find_packages
+import os
 
-version = '1.1.0'
+version = '1.2.0'
 
 # create entry points
 # see http://astropy.readthedocs.org/en/latest/development/scripts.html
@@ -19,10 +20,17 @@ package_data={
         'snap_control': ['adc_register_map.txt'],
     }
 
+
+# Manually install casperfpga if not installed
+try:
+    import casperfpga
+except:
+    os.system('pip install git+https://github.com/ska-sa/casperfpga')
+
 setup(name='snap_control',
       version=version,
-      description='SNAP board control',
-      install_requires=['numpy'],
+      description='CASPER SNAP FPGA board control',
+      install_requires=['numpy', 'casperfpga'],
       url='https://github.com/ucberkeleyseti/snap_control',
       author='D. Price, Z. Abdurashidova and friends',
       entry_points=entry_points,
