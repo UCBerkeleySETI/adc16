@@ -20,16 +20,16 @@ import hickle as hkl
 class SnapManager(object):
     def __init__(self, board_list):
         self.snap_boards = [SnapBoard(bl) for bl in board_list]
-        for snap in self.snap_boards:
-             snap.logger     = logging.getLogger(snap.host)
-             if snap.adc is None:
-                 snap.adc = SnapAdc(self)
-             snap.adc.logger = logging.getLogger(snap.host + '-adc')
+        for s in self.snap_boards:
+             s.logger     = logging.getLogger(s.host)
+             if s.adc is None:
+                 s.adc = SnapAdc(self)
+             s.adc.logger = logging.getLogger(s.host + '-adc')
         self.thread_queue = Queue.Queue()
 
     def program(self, boffile, gain=1, demux_mode=1):
-        for snap in self.snap_boards:
-            t = Thread(target=snap.program, args=(boffile, gain, demux_mode), name=snap.host)
+        for s in self.snap_boards:
+            t = Thread(target=s.program, args=(boffile, gain, demux_mode), name=s.host)
             t.daemon = True
             t.start()
             self.thread_queue.put(t)
@@ -48,10 +48,9 @@ class SnapManager(object):
                 d1 = demux_data(snapshot, 4)
                 print("%06s ADC %i: %s" % (s.host, chip_id, np.allclose(d1, 42)))
 
-    def set_input(self, input_id):
+    def set_inputs(self, input_id):
         for s in self.snap_boards:
-            s.adc.set_input(input_id)
-            s.adc.reset()
+            s.adc.set_inputs(input_id)
 
     def check_rms(self):
         for s in self.snap_boards:
