@@ -27,13 +27,17 @@ class SnapManager(object):
              snap.adc.logger = logging.getLogger(snap.host + '-adc')
         self.thread_queue = Queue.Queue()
 
-    def program(self, boffile, gain, demux_mode):
+    def program(self, boffile, gain=1, demux_mode=1):
         for snap in self.snap_boards:
             t = Thread(target=snap.program, args=(boffile, gain, demux_mode), name=snap.host)
             t.daemon = True
             t.start()
             self.thread_queue.put(t)
         self.thread_queue.join()
+
+    def program_serial(self, boffile, gain=1, demux_mode=1):
+        for s in self.snap_boards:
+            s.program(boffile, gain, demux_mode)
 
     def check_calibration(self):
         for s in self.snap_boards:
