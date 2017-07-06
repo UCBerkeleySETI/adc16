@@ -270,23 +270,23 @@ class SnapAdc(object):
             addr_bit = (addr >> (8 - i - 1)) & 1
             state = (addr_bit << SDA_SHIFT) | CS
             self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
-            self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
-            self.logger.debug(np.binary_repr(state, width=32))
+            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
+            #self.logger.debug(np.binary_repr(state, width=32))
             state = (addr_bit << SDA_SHIFT) | CS | SCLK
             self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
-            self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
-            self.logger.debug(np.binary_repr(state, width=32))
+            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
+            #self.logger.debug(np.binary_repr(state, width=32))
 
         for j in range(16):
             data_bit = (data >> (16 - j - 1)) & 1
             state = (data_bit << SDA_SHIFT) | CS
             self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
-            self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
-            self.logger.debug(np.binary_repr(state, width=32))
+            #self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
+            #self.logger.debug(np.binary_repr(state, width=32))
             state = (data_bit << SDA_SHIFT) | CS | SCLK
             self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
-            self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
-            self.logger.debug(np.binary_repr(state, width=32))
+            #self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
+            #self.logger.debug(np.binary_repr(state, width=32))
 
         self.host.write_int('adc16_controller', IDLE, word_offset=0, blindwrite=True)
 
@@ -387,7 +387,7 @@ class SnapAdc(object):
         self.write_shared_registers({'inp_sel_adc3': ip3,
                                      'inp_sel_adc4': ip4})
     
-    def set_adc_inputs(self, *args):
+    def set_inputs(self, *args):
         """ Set input routing for ADC chips 
         
         Args: integer ids (1,2,3,4) for ADC mapping
@@ -460,8 +460,8 @@ class SnapAdc(object):
 
     def clear_pattern(self):
         """ Clears test pattern from ADCs """
-        self.write('en_ramp',   0b000)
-        self.write('pat_deskew', 0b00)
+        self.write_register('en_ramp',   0b000)
+        self.write_register('pat_deskew', 0b00)
 
     def read_ram(self, device):
         SNAP_REQ = 0x00010000
@@ -471,7 +471,7 @@ class SnapAdc(object):
         # snapshot is a binary string that needs to get unpacked
         # Part of the read request is the size parameter,1024, which specifies the
         # amount of bytes to read form the device
-        snapshot = self.host.read(device, 1024, word_offset=0)
+        snapshot = self.host.read(device, 1024, offset=0)
 
         # struct unpack returns a tuple of signed int values.
         # Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking
@@ -730,7 +730,11 @@ class SnapAdc(object):
             self.logger.error('ADC clock not locked, check your clock source/correctly set demux mode')
             raise RuntimeError('ADC clock not locked, check your clock source/correctly set demux mode')
 
-
+    def check_rms(self):
+        for chip_id in (0,1,2):
+            snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
+            rms = np.std(snapshot)
+            print("%06s ADC %i: %2.2f" % (self.host.host, chip_id, rms))
 
     def set_gain(self, gain):
         """ Set gain value on ADCs"""
@@ -858,6 +862,14 @@ class SnapBoard(casperfpga.KatcpFpga):
             self.logger.info('%s: %s is not an fpg file, could not parse '
                         'system information.' % (self.host, filename))
         self.logger.info('%s: programmed %s okay.' % (self.host, filename))
+    
+    def est_brd_clk(self):
+        """Returns the approximate clock rate of the FPGA in MHz."""
+        firstpass=self.read_uint('sys_clkcounter')
+        time.sleep(2)
+        secondpass=self.read_uint('sys_clkcounter')
+        if firstpass>secondpass: secondpass=secondpass+(2**32)
+        return (secondpass-firstpass)/2000000.
 
     def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
         """ Reprogram the FPGA with a given boffile AND calibrates
