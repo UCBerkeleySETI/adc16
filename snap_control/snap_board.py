@@ -200,7 +200,7 @@ class SnapBoard(casperfpga.KatcpFpga):
         """
         # Make a dictionary out of chips specified on command line.
         # mapping chip letters to numbers to facilitate writing to adc16_controller
-        self.logger.info("Programming with %s" % boffile)
+        self.logger.info("Programming with %s - gain %i demux %i" % (boffile, gain, demux_mode))
         self._program(boffile)
 
         if self.is_adc16_based():
@@ -214,7 +214,6 @@ class SnapBoard(casperfpga.KatcpFpga):
             self.adc.power_cycle()
             self.adc.calibrate()
         self.logger.info("Programming complete.")
-        return
 
     def set_debug(self):
         """ Set logger levels to output debug info """

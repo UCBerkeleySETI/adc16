@@ -321,13 +321,13 @@ class SnapAdc(object):
             Example: set_adc_inputs(3,2,1,4)
         """
         if len(args) == 1:
-            self.set_demux(4)
+            #self.set_demux(4)
             self.set_input4(args[0])
         elif len(args) == 2:
-            self.set_demux(2)
+            #self.set_demux(2)
             self.set_input2(args[0], args[1])
         elif len(args) == 4:
-            self.set_demux(1)
+            #self.set_demux(1)
             self.set_input1(args[0], args[1], args[2], args[3])
         else:
             raise RuntimeError("Num. inputs (%i) must be 1, 2, or 4." % (len(args)))
