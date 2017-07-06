@@ -107,6 +107,7 @@ class SnapBoard(casperfpga.KatcpFpga):
                 
         # Check if design has an ADC controller; if so, attach controller as self.adc
         self.adc = None
+        self.uses_adc = uses_adc
         # If design has an ADC, attach Generic ADC to add logging and basic functionality
         if uses_adc:
             self.adc = GenericAdc(self)
@@ -216,9 +217,17 @@ class SnapBoard(casperfpga.KatcpFpga):
             self.adc = SnapAdc(self)
             self.fpga_set_demux(1)
             self.adc.set_chip_select(chips)
+            self.adc.initialize()
             self.adc.set_demux(demux_mode)
             self.adc.set_gain(gain)
+            self.adc.power_cycle()
             self.adc.calibrate()
+
+    def set_debug(self):
+        """ Set logger levels to output debug info """
+        self.logger.setLevel(5)
+        if self.uses_adc:
+            self.adc.logger.setLevel(5)
 
     def is_adc16_based(self):
         """ Check if design uses ADC16 chip """
