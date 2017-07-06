@@ -78,7 +78,7 @@ import time
 
 import casperfpga
 
-from snap_control.snap_adc import SnapAdc, GenericAdc
+from .snap_adc import SnapAdc, GenericAdc
 
 katcp_port = 7147
 
