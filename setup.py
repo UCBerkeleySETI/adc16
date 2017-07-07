@@ -5,7 +5,7 @@ setup.py -- setup script for fits2hdf package
 from setuptools import setup, find_packages
 import os
 
-version = '1.2.0'
+version = '1.2.1'
 
 # create entry points
 # see http://astropy.readthedocs.org/en/latest/development/scripts.html
@@ -25,7 +25,9 @@ package_data={
 try:
     import casperfpga
 except:
-    os.system('pip install git+https://github.com/ska-sa/casperfpga')
+    os.system('pip install git+https://github.com/jack-h/tftpy --upgrade')
+    os.system('pip install git+https://github.com/UCBerkeleySETI/casperfpga --upgrade')
+
 
 setup(name='snap_control',
       version=version,
