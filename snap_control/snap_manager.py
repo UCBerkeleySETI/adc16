@@ -63,14 +63,18 @@ class SnapManager(object):
                 snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
                 rms = np.std(snapshot)
                 print("%06s ADC %i: %2.2f" % (s.host, chip_id, rms))
-
-    def save_adc_snapshot(self, filename=None):
+         
+    def grab_adc_snapshot(self, filename=None):
         d = {}
         for s in self.snap_boards:
             for chip_id in (0, 1, 2):
                 snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
-                d1 = np.array(demux_data(snapshot, 4), dtype='int32')
-                d["%s-%i" % (s.host, chip_id)] = d1
+                #d1 = np.array(demux_data(snapshot, 4), dtype='int32')
+                d["%s-%i" % (s.host, chip_id)] = snapshot
+        return d
+                
+    def save_adc_snapshot(self, filename=None):
+        d = self.grab_adc_snapshot()
 
         print("Saving data...")
 
