@@ -119,7 +119,7 @@ class SnapBoard(casperfpga.KatcpFpga):
         Notes:
             Deprecated in favor of estimate_fpga_clock()
         """
-        self.estimate_fpga_clock()
+        return self.estimate_fpga_clock()
 
     def program(self, boffile, gain=1, demux_mode=1, chips=('a', 'b', 'c')):
         """ Reprogram the FPGA with a given boffile AND calibrates
