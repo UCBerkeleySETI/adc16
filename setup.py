@@ -25,8 +25,8 @@ package_data={
 try:
     import casperfpga
 except:
-    os.system('pip install git+https://github.com/jack-h/tftpy --upgrade')
-    os.system('pip install git+https://github.com/UCBerkeleySETI/casperfpga --upgrade')
+    os.system('pip install git+https://github.com/jack-h/tftpy')
+    os.system('pip install git+https://github.com/UCBerkeleySETI/casperfpga')
 
 
 setup(name='snap_control',

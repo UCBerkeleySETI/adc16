@@ -80,6 +80,7 @@ class SnapAdc(object):
         self.chips = {'a': 0, 'b': 1, 'c': 2}
         self.ADC_MAP = generate_adc_map()
         self.INPUT_MAP = INPUT_MAP
+        self.control_register = 'adc16_controller'
 
         self.logger = logging.getLogger('SnapAdc')
 
@@ -176,6 +177,11 @@ class SnapAdc(object):
 
         self.write(r.addr, shared_val)
 
+    def _write(self, value, word_offset=0, blindwrite=True):
+        """ Write value to control register """
+        self.host.write_int(self.control_register, value,
+                            word_offset=word_offset, blindwrite=blindwrite)
+
     def write(self, addr, data):
         """
         # write_adc is used for writing specific ADC registers.
@@ -187,30 +193,30 @@ class SnapAdc(object):
         CS = self.chip_select
         IDLE = SCLK
         SDA_SHIFT = 8
-        self.host.write_int('adc16_controller', IDLE, word_offset=0, blindwrite=True)
+        self._write(IDLE, word_offset=0)
         for i in range(8):
             addr_bit = (addr >> (8 - i - 1)) & 1
             state = (addr_bit << SDA_SHIFT) | CS
-            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self._write(state, word_offset=0)
             #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
             #self.logger.debug(np.binary_repr(state, width=32))
             state = (addr_bit << SDA_SHIFT) | CS | SCLK
-            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self._write(state, word_offset=0)
             #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
             #self.logger.debug(np.binary_repr(state, width=32))
 
         for j in range(16):
             data_bit = (data >> (16 - j - 1)) & 1
             state = (data_bit << SDA_SHIFT) | CS
-            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self._write(state, word_offset=0, blindwrite=True)
             #self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
             #self.logger.debug(np.binary_repr(state, width=32))
             state = (data_bit << SDA_SHIFT) | CS | SCLK
-            self.host.write_int('adc16_controller', state, word_offset=0, blindwrite=True)
+            self._write(state, word_offset=0, blindwrite=True)
             #self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
             #self.logger.debug(np.binary_repr(state, width=32))
 
-        self.host.write_int('adc16_controller', IDLE, word_offset=0, blindwrite=True)
+            self._write(IDLE, word_offset=0, blindwrite=True)
 
     def power_cycle(self):
         """ Power cycle the ADC """
@@ -364,7 +370,7 @@ class SnapAdc(object):
 
                             ----------
         0x45 ADDR           | D0  D1 |
-        -------------------------------
+        ------------------------------
         | pat_deskew        | 0   X  |
         | pat_sync          | X   0  |
         ------------------------------
@@ -389,8 +395,8 @@ class SnapAdc(object):
 
     def read_ram(self, device):
         SNAP_REQ = 0x00010000
-        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', SNAP_REQ, word_offset=1, blindwrite=True)
+        self._write(0, word_offset=1, blindwrite=True)
+        self._write(SNAP_REQ, word_offset=1, blindwrite=True)
         # Read the device that is passed to the read_ram method,1024 elements at a time,
         # snapshot is a binary string that needs to get unpacked
         # Part of the read request is the size parameter,1024, which specifies the
@@ -429,90 +435,76 @@ class SnapAdc(object):
         chip_select_bs = 1 << chip_shift + chip_num
         state = (chip_select_bs | chan_select_bs)
         #		print('Bitslip state written to word_offset=1:',bin(state))
-        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', state, word_offset=1, blindwrite=True)
-        #	regvalue=self.read('adc16_controller', 32, word_offset=1)
-        #	print('Bitslip Reg Value\n')
-        #	print(struct.unpack('>32b', regvalue))
-        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
+        self._write(0, word_offset=1, blindwrite=True)
+        self._write(state, word_offset=1, blindwrite=True)
+        self._write(0, word_offset=1, blindwrite=True)
 
     def delay_tap(self, tap, channel, chip_num):
 
         delay_tap_mask = 0x1f
 
+        CHAN_SEL_MAP = {'1': 0x1 << (chip_num * 4),
+                        '2': 0x2 << (chip_num * 4),
+                        '3': 0x4 << (chip_num * 4),
+                        '4': 0x8 << (chip_num * 4)}
+
+        LANE_SEL_MAP = {'a': 2,
+                        'b': 3}
+
         if channel == 'all':
             chan_select = (0xf << (chip_num * 4))
-            self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
+            self._write(0, word_offset=2, blindwrite=True)
+            self._write(0, word_offset=3, blindwrite=True)
             # Set tap bits
-            self.host.write_int('adc16_controller', delay_tap_mask & tap, word_offset=1, blindwrite=True)
+            self._write(delay_tap_mask & tap, word_offset=1, blindwrite=True)
             # Set strobe bits
-            self.host.write_int('adc16_controller', chan_select, word_offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', chan_select, word_offset=3, blindwrite=True)
+            self._write(chan_select, word_offset=2, blindwrite=True)
+            self._write(chan_select, word_offset=3, blindwrite=True)
             # Clear all bits
-            self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
-            self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
+            for wo in (1, 2, 3):
+                self._write(0, word_offset=wo, blindwrite=True)
             # Note this return statement, after all channels have been bitslip it'll exit out of the function.
             # the function is called again after figuring out the best tap with a single channel argument.
             return
-        elif channel == '1a':
-            chan_select = 0x1 << (chip_num * 4)
-            lane_offset = 2
-        elif channel == '1b':
-            chan_select = 0x1 << (chip_num * 4)
-            lane_offset = 3
-        elif channel == '2a':
-            chan_select = 0x2 << (chip_num * 4)
-            lane_offset = 2
-        elif channel == '2b':
-            chan_select = 0x2 << (chip_num * 4)
-            lane_offset = 3
-        elif channel == '3a':
-            chan_select = 0x4 << (chip_num * 4)
-            lane_offset = 2
-        elif channel == '3b':
-            chan_select = 0x4 << (chip_num * 4)
-            lane_offset = 3
-        elif channel == '4a':
-            chan_select = 0x8 << (chip_num * 4)
-            lane_offset = 2
-        elif channel == '4b':
-            chan_select = 0x8 << (chip_num * 4)
-            lane_offset = 3
 
-        self.host.write_int('adc16_controller', 0, word_offset=lane_offset, blindwrite=True)
+        else:
+            # Channel should be of form '1a' or '2b' etc
+            chan_select = CHAN_SEL_MAP[channel[0]]
+            lane_offset = LANE_SEL_MAP[channel[1]]
+
+        self._write(0, word_offset=lane_offset, blindwrite=True)
         # Set tap bits
-        self.host.write_int('adc16_controller', delay_tap_mask & tap, word_offset=1, blindwrite=True)
+        self._write(delay_tap_mask & tap, word_offset=1, blindwrite=True)
         # Set strobe bits
-        self.host.write_int('adc16_controller', chan_select, word_offset=lane_offset, blindwrite=True)
+        self._write(chan_select, word_offset=lane_offset, blindwrite=True)
         # Clear all bits
-        self.host.write_int('adc16_controller', 0, word_offset=1, blindwrite=True)
-        self.host.write_int('adc16_controller', 0, word_offset=2, blindwrite=True)
-        self.host.write_int('adc16_controller', 0, word_offset=3, blindwrite=True)
+        for wo in (1, 2, 3):
+            self._write(0, word_offset=wo, blindwrite=True)
 
 
     def test_tap(self, chip_num, taps):
         """
-        returns an array of error counts for a given tap(assume structure chan 1a, chan 1b, chan 2a, chan 2b etc.. until chan 4b
-        taps argument can have a value of an int or a string. If it's a string then it will iterate through all 32 taps
+        returns an array of error counts for a given tap(assume structure chan 1a,
+        chan 1b, chan 2a, chan 2b etc.. until chan 4b
+        taps argument can have a value of an int or a string. If it's a string then it will
+        iterate through all 32 taps
         if it's an int it will only delay all channels by that particular tap value.
         """
         # Form dicts for counting channel erros and offsets
-        chan_ids = ['1a', '1b', '2a', '2b', '3a', '3b', '4a', '4b']
+        chan_ids     = ['1a', '1b', '2a', '2b', '3a', '3b', '4a', '4b']
         chan_offsets = dict(zip(chan_ids, range(8)))
-        zeros    = [0, 0, 0, 0, 0, 0, 0, 0,]
-        error_count = []
+        zeros        = [0, 0, 0, 0, 0, 0, 0, 0]
+        error_count  = []
 
         if taps == 'all':
-            # read_ram reuturns an array of data form a sanpshot from ADC output
-
+            # read_ram returns an array of data form a snapshot from ADC output
             for tap in range(32):
                 chan_errs = dict(zip(chan_ids, zeros))
                 self.delay_tap(tap, 'all', chip_num)
                 data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
-                self.logger.debug("HERE TAPS %s | %s" % (taps, data))
-                # each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
+                self.logger.debug("TAPS %s | %s" % (taps, data))
+                # each tap will return an error count for each channel and lane, so an
+                # array of 8 elements with an error count for each
 
                 for i in range(0, 1024, 8):
                     for chan_id, chan_offset in chan_offsets.items():
@@ -526,12 +518,12 @@ class SnapAdc(object):
             return (error_count)
         else:
             chan_errs = dict(zip(chan_ids, zeros))
-
             # read_ram reuturns an array of data form a sanpshot from ADC output
             self.delay_tap(taps, 'all', chip_num)
             data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
-            # each tap will return an error count for each channel and lane, so an array of 8 elements with an error count for each
-            self.logger.debug("HERE TAPS %s | %s" % (taps, data))
+            # each tap will return an error count for each channel and lane,
+            # so an array of 8 elements with an error count for each
+            self.logger.debug("TAPS %s | %s" % (taps, data))
             for i in range(0, 1024, 8):
                 for chan_id, chan_offset in chan_offsets.items():
                     if data[i + chan_offset] != 0x2a:
@@ -549,33 +541,30 @@ class SnapAdc(object):
         self.host.fpga_set_demux(4)
 
         for chip, chip_num in self.chips.iteritems():
-            # Set demux 4 on the FPGA side (just rearranging outputs as opposed to dividing clock and assigning channels)
-
-
             self.logger.info('Calibrating chip %s...' % chip)
             self.logger.debug('Setting deskew pattern...')
-            #self.logger.debug('Stuff in chip %s before enabling pattern' % chip)
-            #self.logger.debug(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
             self.enable_pattern('deskew')
             self.logger.debug('Stuff in chip after enabling test mode\n')
             self.logger.debug(self.read_ram('adc16_wb_ram{0}'.format(chip_num)))
-
             self.logger.debug('Taps before bitslipping anything\n')
             self.logger.debug(self.test_tap(chip_num, 'all'))
-            # check if either of the extreme tap setting returns zero errors in any one of the channels. Bitslip if True.
-            # This is to make sure that the eye of the pattern is swept completely
-            error_counts_0 = self.test_tap(chip_num, 0)
+
+            # check if either of the extreme tap setting returns zero errors in any one of the channels.
+            # Bitslip if True. This is to make sure that the eye of the pattern is swept completely
+            error_counts_0  = self.test_tap(chip_num, 0)
             error_counts_31 = self.test_tap(chip_num, 31)
             for i in range(8):
                 if not (error_counts_0[0][i]) or not (error_counts_31[0][i]):
                     self.logger.debug('Bitslipping chan %i' % i)
                     self.bitslip(chip_num, i)
-                    error_counts_0 = self.test_tap(chip_num, 0)
+                    error_counts_0  = self.test_tap(chip_num, 0)
                     error_counts_31 = self.test_tap(chip_num, 31)
 
-            # error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing 8 elements,each element is the number of errors
+            # error_list is a list of 32 'rows'(corresponding to the 32 taps) , each row containing
+            # 8 elements,each element is the number of errors
             # of that lane  when compared to the expected value. read_ram method unpacks 1024 bytes. There are 8
-            # lanes so each lane gets 1024/8=128 read outs from a single call to read_ram method, like this, channel_1a etc. represent the errors in that channel
+            # lanes so each lane gets 1024/8=128 read outs from a single call to read_ram method,
+            # like this, channel_1a etc. represent the errors in that channel
             # tap 0: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
             # tap 1: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
             # .....: [ channel_1a channel_1b channel_2a channel_2b channel_3a channel_3b channel_4a channel_4b]
@@ -586,11 +575,14 @@ class SnapAdc(object):
             self.logger.debug('Printing the list of errors, each row is a tap\n')
             self.logger.debug(['chan1a', 'chan1b', 'chan2a', 'chan2b', 'chan3a', 'chan3b', 'chan4a', 'chan4b'])
             self.logger.debug(np.array(error_list))
-            min_tap = []
-            max_tap = []
-            # This loop goes through error_list, finds the elements with a value of 0 and appends them to the good tap range list
-            # It also picks out the elements corresponding to different channels and groups them together. The error_list is a list where each 'row' is a different tap
-            # I wanted to find the elements in each channel that have zero errors, group the individual channels, and get the value of the tap in which they're in - which is the index of the row
+
+            # This loop goes through error_list, finds the elements with a value of 0 and appends them
+            # to the good tap range list
+            # It also picks out the elements corresponding to different channels and groups them together.
+            # The error_list is a list where each 'row' is a different tap
+            # I wanted to find the elements in each channel that have zero errors,
+            # group the individual channels, and get the value of the tap in which they're in
+            # - which is the index of the row
             for i in range(8):
                 good_tap_range.append([])
                 # j represents the tap value
@@ -599,7 +591,7 @@ class SnapAdc(object):
                     if error_list[j][i] == 0:
                         good_tap_range[i].append(j)
                         #	find the min and max of each element of good tap range and call delay tap
-            self.logger.debug('Printing good tap values for each channel...each row corresponds to different channel')
+            self.logger.debug('Printing good tap values for each channel - each row is a different channel')
 
             for i in range(len(good_tap_range)):
                 logging.debug('Channel {0}: {1}'.format(i + 1, good_tap_range[i]))
@@ -622,7 +614,6 @@ class SnapAdc(object):
 
     def sync_chips(self, chip_num):
         """ Synchronize chips with bitslip """
-        # channels = {0:'1a',1:'1b',2:'2a',3:'2b',4:'3a',5:'3b',6:'4a',7:'4b'}
         self.enable_pattern('sync')
 
         snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
@@ -632,29 +623,30 @@ class SnapAdc(object):
         for i in range(8):
             loop_ctl = 0
             while snap[i] != 0x70:
-                self.logger.debug('Bitsliping channel %i\n' % i)
+                self.logger.debug('Bitslipping channel %i\n' % i)
                 self.bitslip(chip_num, i)
                 snap = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
                 self.logger.debug('Snapshot after bitslipping:\n')
                 self.logger.debug(snap[0:8])
                 loop_ctl += 1
                 if loop_ctl > 10:
-                    self.logger.error(
-                        "It appears that bitslipping is not working, make sure you're using the version of Jasper library")
-                    raise RuntimeError("bitslipping is not working. Are you using the latest Jasper libraries?")
+                    err = "Bitslipping is not working. Are you using the latest Jasper libraries?"
+                    self.logger.error(err)
+                    raise RuntimeError(err)
 
     def clock_locked(self):
         """ Check if CLK is locked """
-        locked_bit = self.host.read_int('adc16_controller', word_offset=0) >> 24
+        locked_bit = self.host.read_int(self.control_register, word_offset=0) >> 24
         if locked_bit & 3:
-            self.logger.info('ADC clock is locked!!!')
+            self.logger.info('ADC clock is locked.')
             self.logger.info('Board clock: %2.4f MHz' % self.host.est_brd_clk())
+            return True
         else:
-            err = 'ADC clock not locked, check your clock source/correctly set demux mode'
-            self.logger.error('ADC clock not locked, check your clock source/correctly set demux mode')
-            raise RuntimeError('ADC clock not locked, check your clock source/correctly set demux mode')
+            self.logger.info('ADC clock not locked. Check clock and/or demux mode.')
+            return False
 
     def check_rms(self):
+        """ Calculate RMS of ADC snapshot and print to screen """
         for chip_id in (0,1,2):
             snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
             rms = np.std(snapshot)
@@ -664,24 +656,30 @@ class SnapAdc(object):
         """ Set gain value on ADCs"""
         self.gain = gain
         if self.demux_mode == 1:
-            self.write(0x2a, self.gain * 0x1111)
+            self.write_shared_registers({'cgain4_ch1': gain,
+                                         'cgain4_ch2': gain,
+                                         'cgain4_ch3': gain,
+                                         'cgain4_ch4': gain})
         elif self.demux_mode == 2:
-            self.write(0x2b, self.gain * 0x0011)
+            self.write_shared_registers({'cgain2_ch1': gain,
+                                         'cgain2_ch2': gain})
         elif self.demux_mode == 4:
-            self.write(0x2b, self.gain * 0x0100)
+            self.write_register('cgain1_ch1', gain)
         else:
-            self.logger.error('demux mode is not set')
-            raise RuntimeError("Demux Mode is not set")
+            err = "Demux Mode is not set"
+            self.logger.error(err)
+            raise RuntimeError(err)
 
     def calibrate(self):
-        """" Run calibration routines """
-        # check if clock is locked
-        self.clock_locked()
-        # Calibrate ADC by going through various tap values
-        self.walk_taps()
-        # Clear pattern setting registers so real data could be taken
-        self.clear_pattern()
-        self.host.logger.info('Setting fpga demux to %i' % self.demux_mode)
-        self.host.fpga_set_demux(self.demux_mode)
+        """" Run SERDES calibration routines """
+        if self.clock_locked():
+            # Calibrate ADC by going through various tap values
+            self.walk_taps()
+            # Clear pattern setting registers so real data could be taken
+            self.clear_pattern()
+        else:
+            err = 'Could not calibrate, ADC clock not locked.'
+            self.logger.error(err)
+            raise RuntimeError(err)
 
 
