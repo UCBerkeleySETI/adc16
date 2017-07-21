@@ -181,6 +181,7 @@ class SnapAdc(object):
         """ Write value to control register """
         self.host.write_int(self.control_register, value,
                             word_offset=word_offset, blindwrite=blindwrite)
+        self.logger.debug("Writing %s | offset %s" % (hex(value), word_offset))
 
     def write(self, addr, data):
         """
