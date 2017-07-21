@@ -614,8 +614,6 @@ class SnapAdc(object):
             self.logger.debug('Chip {0} Error count for {1} tap: {2}'.format(chip_num, taps, error_count))
             return (error_count)
 
-    def test_tap_all(self, chip_num):
-
     def walk_taps(self):
         # Set FPGA to demux 4 because it makes snap blocks easier to interpret
         self.host.fpga_set_demux(4)
