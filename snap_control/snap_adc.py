@@ -1,3 +1,84 @@
+"""
+# snap_adc.py
+
+A controller for the three HMCAD1511 ADC chips on the CASPER SNAP board.
+
+This requires a 'host' SnapBoard() object to which it attaches:
+
+    ```
+    s = SnapBoard('board_name')
+    s.adc   <--- This is a SnapAdc object
+    ```
+
+HMCAD1511 datasheet can be found at:
+https://casper.berkeley.edu/wiki/images/0/05/Hittite_hmcad1511.pdf
+
+## ADC16 controller memory map
+
+   # ======================================= #             # ======================================= #
+   # ADC16 3-Wire Register (word 0)          #             # ADC16 Control Register (word 1)         #
+   # ======================================= #             # ======================================= #
+   # LL = Clock locked bits                  #             # W  = Deux write-enable                  #
+   # NNNN = Number of ADC chips supported    #             # MM = Demux mode                         #
+   # RR = ROACH2 revision expected/required  #             # R = ADC16 Reset                         #
+   # C = SCLK                                #             # S = Snap Request                        #
+   # D = SDATA                               #             # H = ISERDES Bit Slip Chip H             #
+   # 7 = CSNH (chip select H, active high)   #             # G = ISERDES Bit Slip Chip G             #
+   # 6 = CSNG (chip select G, active high)   #             # F = ISERDES Bit Slip Chip F             #
+   # 5 = CSNF (chip select F, active high)   #             # E = ISERDES Bit Slip Chip E             #
+   # 4 = CSNE (chip select E, active high)   #             # D = ISERDES Bit Slip Chip D             #
+   # 3 = CSND (chip select D, active high)   #             # C = ISERDES Bit Slip Chip C             #
+   # 2 = CSNC (chip select C, active high)   #             # B = ISERDES Bit Slip Chip B             #
+   # 1 = CSNB (chip select B, active high)   #             # A = ISERDES Bit Slip Chip A             #
+   # 0 = CSNA (chip select A, active high)   #             # T = Delay Tap
+   # ======================================= #             # i = Bitslip specific channel(out of 8)  #
+   # |<-- MSb                       LSb -->| #             # ======================================= #
+   # 0000_0000_0011_1111_1111_2222_2222_2233 #             # |<-- MSb                       LSb -->| #
+   # 0123_4567_8901_2345_6789_0123_4567_8901 #             # 0000 0000 0011 1111 1111 2222 2222 2233 #
+   # ---- --LL ---- ---- ---- ---- ---- ---- #             # 0123 4567 8901 2345 6789 0123 4567 8901 #
+   # ---- ---- NNNN ---- ---- ---- ---- ---- #             # ---- -WMM ---- ---- ---- ---- ---- ---- #
+   # ---- ---- ---- --RR ---- ---- ---- ---- #             # ---- ---- ---R ---- ---- ---- ---- ---- #
+   # ---- ---- ---- ---- ---- --C- ---- ---- #             # ---- ---- ---- ---S ---- ---- ---- ---- #
+   # ---- ---- ---- ---- ---- ---D ---- ---- #             # ---- ---- ---- ---- HGFE DCBA iii- ---- #
+   # ---- ---- ---- ---- ---- ---- 7654 3210 #             # ---- ---- ---- ---- ---- ---- ---T TTTT #
+   # |<--- Status ---->| |<--- 3-Wire ---->| #             # ======================================= #
+   # ======================================= #             # NOTE: W enables writing the MM bits.    #
+   # NOTE: LL reflects the runtime lock      #             #       Some of the other bits in this    #
+   #       status of a line clock from each  #             #       register are one-hot.  Using      #
+   #       ADC board.  A '1' bit means       #             #       W ensures that the MM bits will   #
+   #       locked (good!).  Bit 5 is always  #             #       only be written to when desired.  #
+   #       used, but bit 6 is only used when #             #       00: demux by 1 (single channel)   #
+   #       NNNN is 4 (or less).              #             # ======================================= #
+   # ======================================= #             # NOTE: MM selects the demux mode.        #
+   # NOTE: NNNN and RR are read-only values  #             #       00: demux by 1 (quad channel)     #
+   #       that are set at compile time.     #             #       01: demux by 2 (dual channel)     #
+   #       They do not indicate the state    #             #       10: demux by 4 (single channel)   #
+   #       of the actual hardware in use     #             #       11: undefined                     #
+   #       at runtime.                       #             #       ADC board.  A '1' bit means       #
+   # ======================================= #             #       locked (good!).  Bit 5 is always  #
+                                                           #       used, but bit 6 is only used when #
+                                                           #       NNNN is 4 (or less).              #
+                                                           # ======================================= #
+
+
+   # =============================================== #     # =============================================== #
+   # ADC16 Delay A Strobe Register (word 2)          #     # ADC0 Delay B Strobe Register (word 3)           #
+   # =============================================== #     # =============================================== #
+   # D = Delay Strobe (rising edge active)           #     # D = Delay Strobe (rising edge active)           #
+   # =============================================== #     # =============================================== #
+   # |<-- MSb                              LSb -->|  #     # |<-- MSb                              LSb -->|  #
+   # 0000  0000  0011  1111  1111  2222  2222  2233  #     # 0000  0000  0011  1111  1111  2222  2222  2233  #
+   # 0123  4567  8901  2345  6789  0123  4567  8901  #     # 0123  4567  8901  2345  6789  0123  4567  8901  #
+   # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #     # DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  DDDD  #
+   # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #     # |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  #
+   # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #     # H4 H1 G4 G1 F4 F1 E4 E1 D4 D1 C4 C1 B4 B1 A4 A1 #
+   # =============================================== #     # =============================================== #
+
+
+"""
+
+
+
 import logging
 import struct
 import time
@@ -5,6 +86,9 @@ import time
 import numpy as np
 from pkg_resources import resource_filename
 
+
+# Notes:
+# Load ADC MAP (Table 5 in HMCAD1511 spec sheet)
 ADC_MAP_TXT = resource_filename("snap_control", "adc_register_map.txt")
 
 
@@ -29,6 +113,15 @@ def generate_adc_map():
     ADC_MAP = {}
 
     class AdcRegister(object):
+        """ Simple object to store ADC register information.
+
+        AdcRegister(name, hex_addr, width, offset, description)
+            name: name of register
+            hex_addr: Address of register word in hexadecimal (hex or int)
+            width: width of register (int)
+            offset: offset of register within hex word (int)
+            description: textual description of register (string)
+        """
         def __init__(self, name, hex_addr, width, offset, description):
             self.name   = name.strip()
             if isinstance(hex_addr, int):
@@ -63,7 +156,7 @@ class SnapAdc(object):
     Provides control and calibration routines for the HMCAD1511.
 
     Args:
-        host (SnapBoard or FpgaClient object): Instance which has the adc16_controller
+        host (SnapBoard object): Instance which has the adc16_controller
 
     """
 
