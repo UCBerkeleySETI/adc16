@@ -633,7 +633,7 @@ class SnapAdc(object):
         # Set FPGA to demux 4 because it makes snap blocks easier to interpret
         self.host.fpga_set_demux(4)
 
-        for chip, chip_num in self.chips.iteritems():
+        for chip, chip_num in sorted(self.chips.items()):
             self.logger.info('Calibrating chip %s...' % chip)
             self.logger.debug('Setting deskew pattern...')
             self.enable_pattern('deskew')
