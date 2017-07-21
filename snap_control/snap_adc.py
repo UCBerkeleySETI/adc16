@@ -181,7 +181,7 @@ class SnapAdc(object):
         """ Write value to control register """
         self.host.write_int(self.control_register, value,
                             word_offset=word_offset, blindwrite=blindwrite)
-        self.logger.debug("Writing %s | offset %s" % (hex(value), word_offset))
+
 
     def write(self, addr, data):
         """
@@ -217,7 +217,7 @@ class SnapAdc(object):
             #self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
             #self.logger.debug(np.binary_repr(state, width=32))
 
-            self._write(IDLE, word_offset=0, blindwrite=True)
+        self._write(IDLE, word_offset=0, blindwrite=True)
 
     def power_cycle(self):
         """ Power cycle the ADC """
@@ -420,7 +420,6 @@ class SnapAdc(object):
         #			print('{:08b}'.format(array_data[i]))
         # print(array_data)
         return array_data
-
 
     def bitslip(self, chip_num, channel):
         """
