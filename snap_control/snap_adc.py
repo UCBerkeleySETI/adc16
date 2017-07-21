@@ -592,22 +592,7 @@ class SnapAdc(object):
         if taps == 'all':
             # read_ram returns an array of data form a snapshot from ADC output
             for tap in range(32):
-                chan_errs = dict(zip(chan_ids, zeros))
-                self.delay_tap(tap, 'all', chip_num)
-                data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
-                self.logger.debug("TAPS %s | %s" % (taps, data))
-                # each tap will return an error count for each channel and lane, so an
-                # array of 8 elements with an error count for each
-
-                for i in range(0, 1024, 8):
-                    for chan_id, chan_offset in chan_offsets.items():
-                        if data[i + chan_offset] != 0x2a:
-                            chan_errs[chan_id] += 1
-
-                error_count.append(
-                    [chan_errs['1a'], chan_errs['1b'], chan_errs['2a'], chan_errs['2b'],
-                     chan_errs['3a'], chan_errs['3b'], chan_errs['4a'], chan_errs['4b']]
-                    )
+                error_count.append(self.test_tap(chip_num, tap))
             return (error_count)
         else:
             chan_errs = dict(zip(chan_ids, zeros))
@@ -628,6 +613,8 @@ class SnapAdc(object):
                 )
             self.logger.debug('Chip {0} Error count for {1} tap: {2}'.format(chip_num, taps, error_count))
             return (error_count)
+
+    def test_tap_all(self, chip_num):
 
     def walk_taps(self):
         # Set FPGA to demux 4 because it makes snap blocks easier to interpret
