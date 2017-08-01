@@ -29,7 +29,10 @@ class SnapManager(object):
              s.adc.logger = logging.getLogger(s.host + '-adc')
 
     def _run(self, method_name, *args, **kwargs):
-        """ Run a method on all snap boards """
+        """ Run a method on all snap boards
+
+        Method must return nothing
+        """
         thread_list = []
         for s in self.snap_boards:
 
@@ -74,6 +77,29 @@ class SnapManager(object):
     def set_inputs(self, input_id):
         self._run('set_inputs', input_id)
 
+    def is_adc16_based(self):
+        self._run('is_adc16_based')
+
+    def fpga_set_demux(self, fpga_demux):
+        self._run('fpga_set_demux', fpga_demux)
+
+    def estimate_fpga_clock(self):
+        self._run('estimate_fpga_clock')
+
+    def write_int(self, device_name, integer, blindwrite=False, word_offset=0):
+        self._run('write_int', device_name, integer, blindwrite=False, word_offset=0)
+
+    def write(self, device_name, data, offset=0):
+        self._run('write', device_name, data, offset=0)
+
+    def read_int(self, device_name, word_offset=0)
+        raise NotImplementedError
+
+    def read_uint(self, device_name, word_offset=0):
+        raise NotImplementedError
+
+    def get_system_information(self, filename=None, fpg_info=None):
+        raise NotImplementedError
 
 
     def check_rms(self):
