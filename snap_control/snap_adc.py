@@ -78,7 +78,6 @@ https://casper.berkeley.edu/wiki/images/0/05/Hittite_hmcad1511.pdf
 """
 
 
-
 import logging
 import struct
 import time
@@ -91,7 +90,6 @@ from pkg_resources import resource_filename
 # Load ADC MAP (Table 5 in HMCAD1511 spec sheet)
 ADC_MAP_TXT = resource_filename("snap_control", "adc_register_map.txt")
 
-
 # Notes:
 # Table 8 from HMCAD1511 spec sheet: Input select
 # -------------------------------------------
@@ -101,7 +99,6 @@ ADC_MAP_TXT = resource_filename("snap_control", "adc_register_map.txt")
 # | 0100 0                 | IN3            |
 # | 1000 0                 | IN4            |
 # -------------------------------------------
-
 INPUT_MAP  = {1: 0b00010,
               2: 0b00100,
               3: 0b01000,
@@ -151,7 +148,7 @@ class GenericAdc(object):
 
 
 class SnapAdc(object):
-    """" Controller for HMCAD1511 ADC chip, as used in CASPER SNAP and ROACH2 boards
+    """" Controller for HMCAD1511 ADC chip, as used in CASPER SNAP board
 
     Provides control and calibration routines for the HMCAD1511.
 
@@ -219,6 +216,47 @@ class SnapAdc(object):
                     self.chips['c'] = 2
                 self.chip_select = int('0b%i%i%i' % (chip_a, chip_b, chip_c), 2)
 
+    def _write(self, value, word_offset=0, blindwrite=True):
+        """ Write value to control register """
+        self.host.write_int(self.control_register, value,
+                            word_offset=word_offset, blindwrite=blindwrite)
+
+    def write(self, addr, data):
+        """
+        # write_adc is used for writing specific ADC registers.
+        # ADC controller can only write to adc one bit at a time at rising clock edge
+        """
+        self.logger.debug("WRITING ADDR: %s VAL: %s" % (hex(addr), hex(data)))
+
+        SCLK = 0x200
+        CS = self.chip_select
+        IDLE = SCLK
+        SDA_SHIFT = 8
+        self._write(IDLE, word_offset=0)
+        for i in range(8):
+            addr_bit = (addr >> (8 - i - 1)) & 1
+            state = (addr_bit << SDA_SHIFT) | CS
+            self._write(state, word_offset=0)
+            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
+            #self.logger.debug(np.binary_repr(state, width=32))
+            state = (addr_bit << SDA_SHIFT) | CS | SCLK
+            self._write(state, word_offset=0)
+            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
+            #self.logger.debug(np.binary_repr(state, width=32))
+
+        for j in range(16):
+            data_bit = (data >> (16 - j - 1)) & 1
+            state = (data_bit << SDA_SHIFT) | CS
+            self._write(state, word_offset=0, blindwrite=True)
+            #self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
+            #self.logger.debug(np.binary_repr(state, width=32))
+            state = (data_bit << SDA_SHIFT) | CS | SCLK
+            self._write(state, word_offset=0, blindwrite=True)
+            #self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
+            #self.logger.debug(np.binary_repr(state, width=32))
+
+        self._write(IDLE, word_offset=0, blindwrite=True)
+
     def write_register(self, register, value):
         """ Write register with value
 
@@ -270,47 +308,32 @@ class SnapAdc(object):
 
         self.write(r.addr, shared_val)
 
-    def _write(self, value, word_offset=0, blindwrite=True):
-        """ Write value to control register """
-        self.host.write_int(self.control_register, value,
-                            word_offset=word_offset, blindwrite=blindwrite)
+    def read_ram(self, device):
+        SNAP_REQ = 0x00010000
+        self._write(0, word_offset=1, blindwrite=True)
+        self._write(SNAP_REQ, word_offset=1, blindwrite=True)
+        # Read the device that is passed to the read_ram method,1024 elements at a time,
+        # snapshot is a binary string that needs to get unpacked
+        # Part of the read request is the size parameter,1024, which specifies the
+        # amount of bytes to read form the device
+        snapshot = self.host.read(device, 1024, offset=0)
 
+        # struct unpack returns a tuple of signed int values.
+        # Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking
+        # 1024 bytes each of which is a signed char(in C, python only knows ints). Unpacking as
+        # a signed char is for mapping purposes:
 
-    def write(self, addr, data):
-        """
-        # write_adc is used for writing specific ADC registers.
-        # ADC controller can only write to adc one bit at a time at rising clock edge
-        """
-        self.logger.debug("WRITING ADDR: %s VAL: %s" % (hex(addr), hex(data)))
-
-        SCLK = 0x200
-        CS = self.chip_select
-        IDLE = SCLK
-        SDA_SHIFT = 8
-        self._write(IDLE, word_offset=0)
-        for i in range(8):
-            addr_bit = (addr >> (8 - i - 1)) & 1
-            state = (addr_bit << SDA_SHIFT) | CS
-            self._write(state, word_offset=0)
-            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock low")
-            #self.logger.debug(np.binary_repr(state, width=32))
-            state = (addr_bit << SDA_SHIFT) | CS | SCLK
-            self._write(state, word_offset=0)
-            #self.logger.debug("Printing address state written to adc16_controller, word_offset=0, clock high")
-            #self.logger.debug(np.binary_repr(state, width=32))
-
-        for j in range(16):
-            data_bit = (data >> (16 - j - 1)) & 1
-            state = (data_bit << SDA_SHIFT) | CS
-            self._write(state, word_offset=0, blindwrite=True)
-            #self.logger.debug("Printing data state written to adc16_controller, word_offset=0, clock low")
-            #self.logger.debug(np.binary_repr(state, width=32))
-            state = (data_bit << SDA_SHIFT) | CS | SCLK
-            self._write(state, word_offset=0, blindwrite=True)
-            #self.logger.debug("Printing data address state written to adc16_controller, word_offset=0, clock high")
-            #self.logger.debug(np.binary_repr(state, width=32))
-
-        self._write(IDLE, word_offset=0, blindwrite=True)
+        # ADC returns values from 0 to 255 (since it's an 8 bit ADC), the voltage going into ADC
+        # varies from -1V to 1V, we want 0 to mean 0, not -1 volts so we need to remap the output
+        # of the ADC to something more sensible, like -128 to 127. That way 0 volts corresponds to
+        # a 0 value in the unpacked data.
+        string_data = struct.unpack('>1024b', snapshot)
+        # Converting the tuple into a vector of 1024 elements
+        array_data = np.array(string_data)
+        #		for i in range(array_data.shape[0]):
+        #			print('{:08b}'.format(array_data[i]))
+        # print(array_data)
+        return array_data
 
     def power_cycle(self):
         """ Power cycle the ADC """
@@ -330,8 +353,6 @@ class SnapAdc(object):
 
     def reset(self):
         """ Reset the ADC """
-
-        # reset adc
         self.write_register('rst', 1)
 
     def initialize(self, chips='all', demux_mode=1, gain=1):
@@ -344,7 +365,6 @@ class SnapAdc(object):
         """
         self.logger.info('Initializing ADC')
         self.set_chip_select(chips)
-
         self.reset()
         self.set_demux(demux_mode)
         self.set_gain(gain)
@@ -417,17 +437,17 @@ class SnapAdc(object):
         Args: integer ids (1,2,3,4) for ADC mapping
 
         Notes:
-            Wrapper for set_input1/2/4 functions.
-            Example: set_adc_inputs(3,2,1,4)
+            Wrapper for set_input1/2/4 functions. Demux mode must
+            already be set correctly (changing demux requires rst, but
+            changing input does not).
+        Example:
+            set_adc_inputs(3,2,1,4)
         """
         if len(args) == 1:
-            #self.set_demux(4)
             self.set_input4(args[0])
         elif len(args) == 2:
-            #self.set_demux(2)
             self.set_input2(args[0], args[1])
         elif len(args) == 4:
-            #self.set_demux(1)
             self.set_input1(args[0], args[1], args[2], args[3])
         else:
             raise RuntimeError("Num. inputs (%i) must be 1, 2, or 4." % (len(args)))
@@ -487,32 +507,43 @@ class SnapAdc(object):
         self.write_register('en_ramp',   0b000)
         self.write_register('pat_deskew', 0b00)
 
-    def read_ram(self, device):
-        SNAP_REQ = 0x00010000
-        self._write(0, word_offset=1, blindwrite=True)
-        self._write(SNAP_REQ, word_offset=1, blindwrite=True)
-        # Read the device that is passed to the read_ram method,1024 elements at a time,
-        # snapshot is a binary string that needs to get unpacked
-        # Part of the read request is the size parameter,1024, which specifies the
-        # amount of bytes to read form the device
-        snapshot = self.host.read(device, 1024, offset=0)
 
-        # struct unpack returns a tuple of signed int values.
-        # Since we're requesting to read adc16_wb_ram at a size of 1024 bytes, we are unpacking
-        # 1024 bytes each of which is a signed char(in C, python only knows ints). Unpacking as
-        # a signed char is for mapping purposes:
 
-        # ADC returns values from 0 to 255 (since it's an 8 bit ADC), the voltage going into ADC
-        # varies from -1V to 1V, we want 0 to mean 0, not -1 volts so we need to remap the output
-        # of the ADC to something more sensible, like -128 to 127. That way 0 volts corresponds to
-        # a 0 value in the unpacked data.
-        string_data = struct.unpack('>1024b', snapshot)
-        # Converting the tuple into a vector of 1024 elements
-        array_data = np.array(string_data)
-        #		for i in range(array_data.shape[0]):
-        #			print('{:08b}'.format(array_data[i]))
-        # print(array_data)
-        return array_data
+    def clock_locked(self):
+        """ Check if CLK is locked """
+        locked_bit = self.host.read_int(self.control_register, word_offset=0) >> 24
+        if locked_bit & 3:
+            self.logger.info('ADC clock is locked.')
+            self.logger.info('Board clock: %2.4f MHz' % self.host.est_brd_clk())
+            return True
+        else:
+            self.logger.info('ADC clock not locked. Check clock and/or demux mode.')
+            return False
+
+    def check_rms(self):
+        """ Calculate RMS of ADC snapshot and print to screen """
+        for chip_id in (0,1,2):
+            snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
+            rms = np.std(snapshot)
+            print("%06s ADC %i: %2.2f" % (self.host.host, chip_id, rms))
+
+    def set_gain(self, gain):
+        """ Set gain value on ADCs"""
+        self.gain = gain
+        if self.demux_mode == 1:
+            self.write_shared_registers({'cgain4_ch1': gain,
+                                         'cgain4_ch2': gain,
+                                         'cgain4_ch3': gain,
+                                         'cgain4_ch4': gain})
+        elif self.demux_mode == 2:
+            self.write_shared_registers({'cgain2_ch1': gain,
+                                         'cgain2_ch2': gain})
+        elif self.demux_mode == 4:
+            self.write_register('cgain1_ch1', gain)
+        else:
+            err = "Demux Mode is not set"
+            self.logger.error(err)
+            raise RuntimeError(err)
 
     def bitslip(self, chip_num, channel):
         """
@@ -614,8 +645,8 @@ class SnapAdc(object):
             self.logger.debug('Chip {0} Error count for {1} tap: {2}'.format(chip_num, tap_id, error_count))
             return error_count
 
-
     def walk_taps(self):
+        """ Main SERDES calibration - walk through taps and find sweet spot """
         # Set FPGA to demux 4 because it makes snap blocks easier to interpret
         self.host.fpga_set_demux(4)
 
@@ -714,42 +745,6 @@ class SnapAdc(object):
                     self.logger.error(err)
                     raise RuntimeError(err)
 
-    def clock_locked(self):
-        """ Check if CLK is locked """
-        locked_bit = self.host.read_int(self.control_register, word_offset=0) >> 24
-        if locked_bit & 3:
-            self.logger.info('ADC clock is locked.')
-            self.logger.info('Board clock: %2.4f MHz' % self.host.est_brd_clk())
-            return True
-        else:
-            self.logger.info('ADC clock not locked. Check clock and/or demux mode.')
-            return False
-
-    def check_rms(self):
-        """ Calculate RMS of ADC snapshot and print to screen """
-        for chip_id in (0,1,2):
-            snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
-            rms = np.std(snapshot)
-            print("%06s ADC %i: %2.2f" % (self.host.host, chip_id, rms))
-
-    def set_gain(self, gain):
-        """ Set gain value on ADCs"""
-        self.gain = gain
-        if self.demux_mode == 1:
-            self.write_shared_registers({'cgain4_ch1': gain,
-                                         'cgain4_ch2': gain,
-                                         'cgain4_ch3': gain,
-                                         'cgain4_ch4': gain})
-        elif self.demux_mode == 2:
-            self.write_shared_registers({'cgain2_ch1': gain,
-                                         'cgain2_ch2': gain})
-        elif self.demux_mode == 4:
-            self.write_register('cgain1_ch1', gain)
-        else:
-            err = "Demux Mode is not set"
-            self.logger.error(err)
-            raise RuntimeError(err)
-
     def calibrate(self):
         """" Run SERDES calibration routines """
         if self.clock_locked():
@@ -761,5 +756,3 @@ class SnapAdc(object):
             err = 'Could not calibrate, ADC clock not locked.'
             self.logger.error(err)
             raise RuntimeError(err)
-
-
