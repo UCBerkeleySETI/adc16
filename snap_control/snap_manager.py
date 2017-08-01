@@ -10,12 +10,14 @@ from .snap_adc import SnapAdc
 from .snap_board import SnapBoard
 from .snap_plot import demux_data
 
-import Queue
-from threading import Thread
 import logging
 import numpy as np
 from datetime import datetime
 import hickle as hkl
+
+
+from threading import Thread
+
 
 class SnapManager(object):
     def __init__(self, board_list):
@@ -25,15 +27,37 @@ class SnapManager(object):
              if s.adc is None:
                  s.adc = SnapAdc(self)
              s.adc.logger = logging.getLogger(s.host + '-adc')
-        self.thread_queue = Queue.Queue()
 
-    def program(self, boffile, gain=1, demux_mode=1):
+    def _run(self, method_name, *args, **kwargs):
+        """ Run a method on all snap boards """
+        thread_list = []
         for s in self.snap_boards:
-            t = Thread(target=s.program, args=(boffile, gain, demux_mode), name=s.host)
+
+            # Retrieve the class method to run by name
+            method = getattr(s, method_name)
+
+            # Check if we have keywords and arguments and create thread accordingly
+            if args is not None and kwargs is None:
+                t = Thread(target=method, name=s.host, args=args)
+            elif args is None and kwargs is not None:
+                t = Thread(target=method, name=s.host, kwargs=kwargs)
+            elif args is not None and kwargs is not None:
+                t = Thread(target=method, name=s.host, args=args, kwargs=kwargs)
+            else:
+                t = Thread(target=method, name=s.host)
+
+            # Start thread
             t.daemon = True
             t.start()
-            self.thread_queue.put(t)
-        self.thread_queue.join()
+            thread_list.append(t)
+
+        # Wait for all threads to finish
+        for t in thread_list:
+            t.join()
+
+
+    def program(self, boffile, gain=1, demux_mode=1):
+        self._run('program', boffile, gain, demux_mode)
 
     def program_serial(self, boffile, gain=1, demux_mode=1):
         for s in self.snap_boards:
