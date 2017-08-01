@@ -142,7 +142,11 @@ class SnapBoard(casperfpga.KatcpFpga):
 
         if self.is_adc16_based():
             self.logger.info("Design is ADC16 based. Calibration routines will run.")
-            self.adc = SnapAdc(self)
+
+            # Check in case SnapAdc is already setup
+            if self.uses_adc:
+                if not isinstance(self.adc, SnapAdc):
+                    self.adc = SnapAdc(self)
             self.fpga_set_demux(1)
             self.adc.set_chip_select(chips)
             self.adc.initialize()

@@ -59,10 +59,6 @@ class SnapManager(object):
     def program(self, boffile, gain=1, demux_mode=1):
         self._run('program', boffile, gain, demux_mode)
 
-    def program_serial(self, boffile, gain=1, demux_mode=1):
-        for s in self.snap_boards:
-            s.program(boffile, gain, demux_mode)
-
     def check_calibration(self):
         for s in self.snap_boards:
             for chip_id in (0,1,2):
@@ -73,13 +69,12 @@ class SnapManager(object):
                 print("%06s ADC %i: %s" % (s.host, chip_id, np.allclose(d1, 42)))
 
     def set_debug(self):
-        """ Set all boards to output debug info """
-        for s in self.snap_boards:
-            s.set_debug()
+        self._run('set_debug')
 
     def set_inputs(self, input_id):
-        for s in self.snap_boards:
-            s.adc.set_inputs(input_id)
+        self._run('set_inputs', input_id)
+
+
 
     def check_rms(self):
         for s in self.snap_boards:
