@@ -575,7 +575,7 @@ class SnapAdc(object):
             self._write(0, word_offset=wo, blindwrite=True)
 
 
-    def test_tap(self, chip_num, taps):
+    def test_tap(self, chip_num, tap_id):
         """
         returns an array of error counts for a given tap(assume structure chan 1a,
         chan 1b, chan 2a, chan 2b etc.. until chan 4b
@@ -587,33 +587,32 @@ class SnapAdc(object):
         chan_ids     = ['1a', '1b', '2a', '2b', '3a', '3b', '4a', '4b']
         chan_offsets = dict(zip(chan_ids, range(8)))
         zeros        = [0, 0, 0, 0, 0, 0, 0, 0]
-        error_count  = []
-        error_count_all = []
+        chan_errs    = dict(zip(chan_ids, zeros))
+        
+        TEST_VAL = 0x2a  # pattern will yield 0x2a = 42 if good
 
-        if taps == 'all':
+        if tap_id == 'all':
             # read_ram returns an array of data form a snapshot from ADC output
+            error_count = np.zeros((32, 8), dtype='int32')
             for tap in range(32):
-                error_count_all.append(self.test_tap(chip_num, tap))
-            return error_count_all
+                error_count[tap] = np.array(self.test_tap(chip_num, tap))
+            return error_count
         else:
-            chan_errs = dict(zip(chan_ids, zeros))
             # read_ram reuturns an array of data form a sanpshot from ADC output
-            self.delay_tap(taps, 'all', chip_num)
+            self.delay_tap(tap_id, 'all', chip_num)
             data = self.read_ram('adc16_wb_ram{0}'.format(chip_num))
             # each tap will return an error count for each channel and lane,
             # so an array of 8 elements with an error count for each
-            self.logger.debug("TAPS %s | %s" % (taps, data))
+            self.logger.debug("TAP %s | %s" % (tap_id, data))
             for i in range(0, 1024, 8):
                 for chan_id, chan_offset in chan_offsets.items():
-                    if data[i + chan_offset] != 0x2a:
+                    if data[i + chan_offset] != TEST_VAL:
                         chan_errs[chan_id] += 1
-
-            error_count.append(
-                [chan_errs['1a'], chan_errs['1b'], chan_errs['2a'], chan_errs['2b'],
-                 chan_errs['3a'], chan_errs['3b'], chan_errs['4a'], chan_errs['4b']]
-                )
-            self.logger.debug('Chip {0} Error count for {1} tap: {2}'.format(chip_num, taps, error_count))
-            return (error_count)
+            
+            error_count = np.array([chan_errs[cid] for cid in chan_ids], dtype='int32')
+            
+            self.logger.debug('Chip {0} Error count for {1} tap: {2}'.format(chip_num, tap_id, error_count))
+            return error_count
 
 
     def walk_taps(self):
@@ -633,8 +632,9 @@ class SnapAdc(object):
             # Bitslip if True. This is to make sure that the eye of the pattern is swept completely
             error_counts_0  = self.test_tap(chip_num, 0)
             error_counts_31 = self.test_tap(chip_num, 31)
+
             for i in range(8):
-                if not (error_counts_0[0][i]) or not (error_counts_31[0][i]):
+                if not (error_counts_0[i]) or not (error_counts_31[i]):
                     self.logger.debug('Bitslipping chan %i' % i)
                     self.bitslip(chip_num, i)
                     error_counts_0  = self.test_tap(chip_num, 0)
