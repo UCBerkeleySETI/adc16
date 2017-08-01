@@ -92,7 +92,7 @@ class SnapManager(object):
     def write(self, device_name, data, offset=0):
         self._run('write', device_name, data, offset=0)
 
-    def read_int(self, device_name, word_offset=0)
+    def read_int(self, device_name, word_offset=0):
         raise NotImplementedError
 
     def read_uint(self, device_name, word_offset=0):
