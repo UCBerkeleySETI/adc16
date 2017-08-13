@@ -15,7 +15,7 @@ import numpy as np
 from datetime import datetime
 import hickle as hkl
 
-from multiprocessing import JoinableQueue, Process
+from multiprocessing import JoinableQueue
 
 from threading import Thread
 
@@ -49,12 +49,12 @@ class SnapManager(object):
             if args is not None:
                 for aa in args:
                     all_args.append(aa)
-            p = Thread(target=self._run_queued,
+            t = Thread(target=self._run_queued,
                         name=s_name,
                         args=all_args,
                         kwargs=kwargs)
-            p.daemon = True
-            p.start()
+            t.daemon = True
+            t.start()
         q.join()
 
         # Iterate through queue and
@@ -108,35 +108,34 @@ class SnapManager(object):
                 print("%06s ADC %i: %s" % (s.host, chip_id, np.allclose(d1, 42)))
 
     def set_debug(self):
-        self._run('set_debug')
+        self._run_many('set_debug')
 
     def set_inputs(self, input_id):
-        self._run('set_inputs', input_id)
+        self._run_many('set_inputs', input_id)
 
     def is_adc16_based(self):
-        self._run('is_adc16_based')
+        self._run_many('is_adc16_based')
 
     def fpga_set_demux(self, fpga_demux):
-        self._run('fpga_set_demux', fpga_demux)
+        self._run_many('fpga_set_demux', fpga_demux)
 
     def estimate_fpga_clock(self):
-        self._run('estimate_fpga_clock')
+        self._run_many('estimate_fpga_clock')
 
     def write_int(self, device_name, integer, blindwrite=False, word_offset=0):
-        self._run('write_int', device_name, integer, blindwrite=False, word_offset=0)
+        self._run_many('write_int', device_name, integer, blindwrite=False, word_offset=0)
 
     def write(self, device_name, data, offset=0):
-        self._run('write', device_name, data, offset=0)
+        self._run_many('write', device_name, data, offset=0)
 
     def read_int(self, device_name, word_offset=0):
-        raise NotImplementedError
+        return self._run_many('read_int', device_name, word_offset)
 
     def read_uint(self, device_name, word_offset=0):
-        raise NotImplementedError
+        return self._run_many('read_uint', device_name, word_offset)
 
     def get_system_information(self, filename=None, fpg_info=None):
-        raise NotImplementedError
-
+        return self._run_many('get_system_information', filename, fpg_info)
 
     def check_rms(self):
         for s in self.snap_boards:
