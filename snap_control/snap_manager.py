@@ -49,10 +49,11 @@ class SnapManager(object):
             if args is not None:
                 for aa in args:
                     all_args.append(aa)
-            p = Process(target=self._run_queued,
+            p = Thread(target=self._run_queued,
                         name=s_name,
                         args=all_args,
                         kwargs=kwargs)
+            p.daemon = True
             p.start()
         q.join()
 
