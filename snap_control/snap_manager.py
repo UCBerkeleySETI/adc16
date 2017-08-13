@@ -40,7 +40,13 @@ class SnapManager(object):
         q = JoinableQueue()
         for s in self.snap_boards:
             s_name = s.host
-            method = getattr(s, fn_to_run)
+            try:
+                method = getattr(s, fn_to_run)
+            except AttributeError:
+                try:
+                    method = getattr(s.adc, fn_to_run)
+                except AttributeError:
+                    raise RuntimeError("Cannot find method %s" % fn_to_run)
 
             # Setup arguments and keyword args
             all_args = [q, s_name, method]
@@ -133,7 +139,7 @@ class SnapManager(object):
             d.update(subd)
 
         for key in sorted(d.keys()):
-            print("%s: %2.2fs" % (key, d[key]))
+            print("%s: %2.2f" % (key, d[key]))
 
     def grab_adc_snapshot(self):
         d = {}
