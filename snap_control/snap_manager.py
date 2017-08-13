@@ -129,7 +129,7 @@ class SnapManager(object):
         d = {}
         dd = self._run_on_all('check_rms')
 
-        for subd in dd.items():
+        for subd in dd.values():
             d.update(subd)
 
         for key in sorted(d.keys()):
@@ -139,7 +139,7 @@ class SnapManager(object):
         d = {}
         dd = self._run_on_all('grab_adc_snapshot')
 
-        for subd in dd.items():
+        for subd in dd.values():
             d.update(subd)
         return d
 
