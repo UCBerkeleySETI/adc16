@@ -129,7 +129,7 @@ class SnapManager(object):
         for s in self.snap_boards:
             s.adc.check_rms()
 
-    def grab_adc_snapshot(self, filename=None):
+    def grab_adc_snapshot(self):
         d = {}
         for s in self.snap_boards:
             dd = s.adc.grab_adc_snapshot()
