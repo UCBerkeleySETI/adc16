@@ -16,12 +16,8 @@ from datetime import datetime
 import hickle as hkl
 
 from multiprocessing import JoinableQueue, Process
-import zmq
 
 from threading import Thread
-
-
-
 
 
 class SnapManager(object):
@@ -32,10 +28,6 @@ class SnapManager(object):
              if s.adc is None:
                  s.adc = SnapAdc(self)
              s.adc.logger = logging.getLogger(s.host + '-adc')
-
-        #self.zmq_context = zmq.Context()
-        #self.zmq_rx = self.zmq_context.socket(zmq.PULL)
-        #self.zmq_rx.bind("tcp://127.0.0.1:5558")
 
         self.task_queue = JoinableQueue()
 
