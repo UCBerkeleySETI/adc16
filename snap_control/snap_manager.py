@@ -31,7 +31,7 @@ class SnapManager(object):
 
         self.task_queue = JoinableQueue()
 
-    def _run_queued(self, q, proc_id, fn_to_run, *args, **kwargs):
+    def _run(self, q, proc_id, fn_to_run, *args, **kwargs):
         return_val = fn_to_run(*args, **kwargs)
         q.put([proc_id, return_val])
         q.task_done()
@@ -49,10 +49,10 @@ class SnapManager(object):
             if args is not None:
                 for aa in args:
                     all_args.append(aa)
-            t = Thread(target=self._run_queued,
-                        name=s_name,
-                        args=all_args,
-                        kwargs=kwargs)
+            t = Thread(target=self._run,
+                       name=s_name,
+                       args=all_args,
+                       kwargs=kwargs)
             t.daemon = True
             t.start()
         q.join()
