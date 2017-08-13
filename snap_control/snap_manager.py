@@ -129,15 +129,19 @@ class SnapManager(object):
         d = {}
         dd = self._run_on_all('check_rms')
 
-        for vv in dd.values():
-            for key, val in dd.items():
-                d.update(key, val)
+        for subd in dd.items():
+            d.update(subd)
 
         for key in sorted(d.keys()):
             print("%s: %2.2fs" % (key, d[key]))
 
     def grab_adc_snapshot(self):
-        return self._run_on_all('grab_adc_snapshot')
+        d = {}
+        dd = self._run_on_all('grab_adc_snapshot')
+
+        for subd in dd.items():
+            d.update(subd)
+        return d
 
                 
     def save_adc_snapshot(self, filename=None):
