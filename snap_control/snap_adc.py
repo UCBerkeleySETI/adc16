@@ -85,6 +85,7 @@ import time
 import numpy as np
 from pkg_resources import resource_filename
 
+from .snap_plot import demux_data
 
 # Notes:
 # Load ADC MAP (Table 5 in HMCAD1511 spec sheet)
@@ -765,3 +766,11 @@ class SnapAdc(object):
             err = 'Could not calibrate, ADC clock not locked.'
             self.logger.error(err)
             raise RuntimeError(err)
+
+    def check_calibration(self):
+        for chip_id in (0,1,2):
+           self.enable_pattern('deskew')
+           snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
+           self.clear_pattern()
+           d1 = demux_data(snapshot, 4)
+           print("%06s ADC %i: %s" % (self.host.host, chip_id, np.allclose(d1, 42)))
