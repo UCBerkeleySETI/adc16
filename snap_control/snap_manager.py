@@ -15,8 +15,13 @@ import numpy as np
 from datetime import datetime
 import hickle as hkl
 
+from multiprocessing import JoinableQueue, Process
+import zmq
 
 from threading import Thread
+
+
+
 
 
 class SnapManager(object):
@@ -27,6 +32,44 @@ class SnapManager(object):
              if s.adc is None:
                  s.adc = SnapAdc(self)
              s.adc.logger = logging.getLogger(s.host + '-adc')
+
+        #self.zmq_context = zmq.Context()
+        #self.zmq_rx = self.zmq_context.socket(zmq.PULL)
+        #self.zmq_rx.bind("tcp://127.0.0.1:5558")
+
+        self.task_queue = JoinableQueue()
+
+    def _run_queued(self, q, proc_id, fn_to_run, *args, **kwargs):
+        return_val = fn_to_run(*args, **kwargs)
+        q.put([proc_id, return_val])
+        q.task_done()
+
+    def _run_many(self, fn_to_run, *args, **kwargs):
+        q = JoinableQueue()
+        for s in self.snap_boards:
+            s_name = s.host
+            method = getattr(s, fn_to_run)
+
+            # Setup arguments and keyword args
+            all_args = [q, s_name, method]
+            if kwargs is None:
+                kwargs = {}
+            if args is not None:
+                for aa in args:
+                    all_args.append(aa)
+            p = Process(target=self._run_queued,
+                        name=s_name,
+                        args=all_args,
+                        kwargs=kwargs)
+            p.start()
+        q.join()
+
+        # Iterate through queue and
+        outdict = {}
+        for ii in range(0, len(self.snap_boards)):
+            d_key, d_out = q.get()
+            outdict[d_key] = d_out
+        return outdict
 
     def _run(self, method_name, *args, **kwargs):
         """ Run a method on all snap boards
