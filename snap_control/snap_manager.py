@@ -36,7 +36,7 @@ class SnapManager(object):
         q.put([proc_id, return_val])
         q.task_done()
 
-    def _run_many(self, fn_to_run, *args, **kwargs):
+    def _run_on_all(self, fn_to_run, *args, **kwargs):
         q = JoinableQueue()
         for s in self.snap_boards:
             s_name = s.host
@@ -64,37 +64,6 @@ class SnapManager(object):
             outdict[d_key] = d_out
         return outdict
 
-    def _run(self, method_name, *args, **kwargs):
-        """ Run a method on all snap boards
-
-        Method must return nothing
-        """
-        thread_list = []
-        for s in self.snap_boards:
-
-            # Retrieve the class method to run by name
-            method = getattr(s, method_name)
-
-            # Check if we have keywords and arguments and create thread accordingly
-            if args is not None and kwargs is None:
-                t = Thread(target=method, name=s.host, args=args)
-            elif args is None and kwargs is not None:
-                t = Thread(target=method, name=s.host, kwargs=kwargs)
-            elif args is not None and kwargs is not None:
-                t = Thread(target=method, name=s.host, args=args, kwargs=kwargs)
-            else:
-                t = Thread(target=method, name=s.host)
-
-            # Start thread
-            t.daemon = True
-            t.start()
-            thread_list.append(t)
-
-        # Wait for all threads to finish
-        for t in thread_list:
-            t.join()
-
-
     def program(self, boffile, gain=1, demux_mode=1):
         self._run('program', boffile, gain, demux_mode)
 
@@ -108,34 +77,48 @@ class SnapManager(object):
                 print("%06s ADC %i: %s" % (s.host, chip_id, np.allclose(d1, 42)))
 
     def set_debug(self):
-        self._run_many('set_debug')
+        self._run_on_all('set_debug')
 
     def set_inputs(self, input_id):
-        self._run_many('set_inputs', input_id)
+        self._run_on_all('set_inputs', input_id)
 
     def is_adc16_based(self):
-        self._run_many('is_adc16_based')
+        self._run_on_all('is_adc16_based')
 
     def fpga_set_demux(self, fpga_demux):
-        self._run_many('fpga_set_demux', fpga_demux)
+        self._run_on_all('fpga_set_demux', fpga_demux)
 
     def estimate_fpga_clock(self):
-        self._run_many('estimate_fpga_clock')
+        self._run_on_all('estimate_fpga_clock')
 
     def write_int(self, device_name, integer, blindwrite=False, word_offset=0):
-        self._run_many('write_int', device_name, integer, blindwrite=False, word_offset=0)
+        self._run_on_all('write_int', device_name, integer, blindwrite=False, word_offset=0)
 
     def write(self, device_name, data, offset=0):
-        self._run_many('write', device_name, data, offset=0)
+        self._run_on_all('write', device_name, data, offset=0)
 
     def read_int(self, device_name, word_offset=0):
-        return self._run_many('read_int', device_name, word_offset)
+        return self._run_on_all('read_int', device_name, word_offset)
 
     def read_uint(self, device_name, word_offset=0):
-        return self._run_many('read_uint', device_name, word_offset)
+        return self._run_on_all('read_uint', device_name, word_offset)
 
     def get_system_information(self, filename=None, fpg_info=None):
-        return self._run_many('get_system_information', filename, fpg_info)
+        return self._run_on_all('get_system_information', filename, fpg_info)
+
+    def listbof(self, run_on_all=True):
+        if run_on_all:
+            return self._run_on_all('listbof')
+        else:
+            s = self.snap_boards[0]
+            return s.listbof()
+
+    def listdev(self, run_on_all=True):
+        if run_on_all:
+            return self._run_on_all('listdev')
+        else:
+            s = self.snap_boards[0]
+            return s.listbof()
 
     def check_rms(self):
         for s in self.snap_boards:
