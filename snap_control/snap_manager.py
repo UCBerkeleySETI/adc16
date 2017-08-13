@@ -73,17 +73,6 @@ class SnapManager(object):
     def program(self, boffile, gain=1, demux_mode=1):
         self._run('program', boffile, gain, demux_mode)
 
-    def check_calibration(self):
-        self._run_on_all('check_calibration')
-        #for s in self.snap_boards:
-        #    for chip_id in (0,1,2):
-        #        s.adc.enable_pattern('deskew')
-        #        snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
-        #        s.adc.clear_pattern()
-        #        d1 = demux_data(snapshot, 4)
-        #        print("%06s ADC %i: %s" % (s.host, chip_id, np.allclose(d1, 42)))
-
-
     def set_debug(self):
         self._run_on_all('set_debug')
 
@@ -151,7 +140,11 @@ class SnapManager(object):
             d.update(subd)
         return d
 
-                
+    def check_calibration(self):
+        dd = self._run_on_all('check_calibration')
+        for k in sorted(dd.keys()):
+            print dd[k]
+
     def save_adc_snapshot(self, filename=None):
         d = self.grab_adc_snapshot()
 
