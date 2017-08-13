@@ -73,6 +73,9 @@ class SnapManager(object):
     def program(self, boffile, gain=1, demux_mode=1):
         self._run('program', boffile, gain, demux_mode)
 
+    def recalibrate(self):
+        self._run_on_all('calibrate')
+
     def set_debug(self):
         self._run_on_all('set_debug')
 
@@ -84,7 +87,6 @@ class SnapManager(object):
 
     def fpga_set_demux(self, fpga_demux):
         self._run_on_all('fpga_set_demux', fpga_demux)
-
 
     def write_int(self, device_name, integer, blindwrite=False, word_offset=0):
         self._run_on_all('write_int', device_name, integer, blindwrite=False, word_offset=0)
@@ -156,4 +158,5 @@ class SnapManager(object):
             filename = 'adc_snapshot_%s.hkl' % now_str
         hkl.dump(d, filename)
         print("OK")
+
 
