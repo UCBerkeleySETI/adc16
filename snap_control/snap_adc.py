@@ -774,5 +774,5 @@ class SnapAdc(object):
            snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
            self.clear_pattern()
            d1 = demux_data(snapshot, 4)
-           output.append("%06s ADC %i: %s\n" % (self.host.host, chip_id, np.allclose(d1, 42)))
+           output += "%06s ADC %i: %s\n" % (self.host.host, chip_id, np.allclose(d1, 42))
         return output
