@@ -522,10 +522,17 @@ class SnapAdc(object):
 
     def check_rms(self):
         """ Calculate RMS of ADC snapshot and print to screen """
-        for chip_id in (0,1,2):
+        for chip_id in (0, 1, 2):
             snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
             rms = np.std(snapshot)
             print("%06s ADC %i: %2.2f" % (self.host.host, chip_id, rms))
+
+    def grab_adc_snapshot(self):
+        d = {}
+        for chip_id in (0, 1, 2):
+            snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
+            d["%s-%i" % (s.host, chip_id)] = snapshot
+        return d
 
     def set_gain(self, gain):
         """ Set gain value on ADCs"""

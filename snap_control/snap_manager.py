@@ -88,8 +88,6 @@ class SnapManager(object):
     def fpga_set_demux(self, fpga_demux):
         self._run_on_all('fpga_set_demux', fpga_demux)
 
-    def estimate_fpga_clock(self):
-        self._run_on_all('estimate_fpga_clock')
 
     def write_int(self, device_name, integer, blindwrite=False, word_offset=0):
         self._run_on_all('write_int', device_name, integer, blindwrite=False, word_offset=0)
@@ -120,20 +118,22 @@ class SnapManager(object):
             s = self.snap_boards[0]
             return s.listbof()
 
+    def estimate_fpga_clock(self, run_on_all=True):
+        if run_on_all:
+            return self._run_on_all('estimate_fpga_clock')
+        else:
+            s = self.snap_boards[0]
+            return s.estimate_fpga_clock()
+
     def check_rms(self):
         for s in self.snap_boards:
-            for chip_id in (0,1,2):
-                snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
-                rms = np.std(snapshot)
-                print("%06s ADC %i: %2.2f" % (s.host, chip_id, rms))
-         
+            s.adc.check_rms()
+
     def grab_adc_snapshot(self, filename=None):
         d = {}
         for s in self.snap_boards:
-            for chip_id in (0, 1, 2):
-                snapshot = s.adc.read_ram('adc16_wb_ram{0}'.format(chip_id))
-                #d1 = np.array(demux_data(snapshot, 4), dtype='int32')
-                d["%s-%i" % (s.host, chip_id)] = snapshot
+            dd = s.adc.grab_adc_snapshot()
+            d.update(dd)
         return d
                 
     def save_adc_snapshot(self, filename=None):
