@@ -526,7 +526,7 @@ class SnapAdc(object):
         for chip_id in (0, 1, 2):
             snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
             rms = np.std(snapshot)
-            rms["%s-%i" % (self.host.host, chip_id)] = rms
+            rms_vals["%s-%i" % (self.host.host, chip_id)] = rms
         return rms_vals
 
     def grab_adc_snapshot(self):
