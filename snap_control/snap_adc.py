@@ -531,7 +531,7 @@ class SnapAdc(object):
         d = {}
         for chip_id in (0, 1, 2):
             snapshot = self.read_ram('adc16_wb_ram{0}'.format(chip_id))
-            d["%s-%i" % (self.host, chip_id)] = snapshot
+            d["%s-%i" % (self.host.host, chip_id)] = snapshot
         return d
 
     def set_gain(self, gain):

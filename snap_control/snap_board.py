@@ -200,3 +200,9 @@ class SnapBoard(casperfpga.KatcpFpga):
         else:
             self.logger.error('Invalid or no demux mode specified')
             raise RuntimeError('Invalid or no demux mode specified')
+
+    def check_rms(self):
+        return self.adc.check_rms()
+
+    def grab_adc_snapshot(self):
+        return self.adc.grab_adc_snapshot()

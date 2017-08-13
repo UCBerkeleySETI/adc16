@@ -126,15 +126,18 @@ class SnapManager(object):
             return s.estimate_fpga_clock()
 
     def check_rms(self):
-        for s in self.snap_boards:
-            s.adc.check_rms()
+        return self._run_on_all('check_rms')
+
+        #for s in self.snap_boards:
+        #    s.adc.check_rms()
 
     def grab_adc_snapshot(self):
-        d = {}
-        for s in self.snap_boards:
-            dd = s.adc.grab_adc_snapshot()
-            d.update(dd)
-        return d
+        return self._run_on_all('grab_adc_snapshot')
+        #d = {}
+        #for s in self.snap_boards:
+        #    dd = s.adc.grab_adc_snapshot()
+        #    d.update(dd)
+        #return d
                 
     def save_adc_snapshot(self, filename=None):
         d = self.grab_adc_snapshot()
