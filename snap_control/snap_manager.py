@@ -71,7 +71,7 @@ class SnapManager(object):
         return outdict
 
     def program(self, boffile, gain=1, demux_mode=1):
-        self._run('program', boffile, gain, demux_mode)
+        self._run_on_all('program', boffile, gain, demux_mode)
 
     def recalibrate(self):
         self._run_on_all('calibrate')
