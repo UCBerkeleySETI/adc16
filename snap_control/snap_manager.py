@@ -74,7 +74,7 @@ class SnapManager(object):
         self._run('program', boffile, gain, demux_mode)
 
     def check_calibration(self):
-        self._run_on_all('check_calibration#')
+        self._run_on_all('check_calibration')
         #for s in self.snap_boards:
         #    for chip_id in (0,1,2):
         #        s.adc.enable_pattern('deskew')
