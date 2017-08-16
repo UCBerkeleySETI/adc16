@@ -20,7 +20,7 @@ from .snap_adc import SnapAdc, GenericAdc
 katcp_port = 7147
 
 
-class SnapBoard(casperfpga.KatcpFpga):
+class SnapBoard(casperfpga.CasperFpga):
     """ Controller for a CASPER SNAP board.
 
     Provides monitor and control of a CASPER SNAP board
