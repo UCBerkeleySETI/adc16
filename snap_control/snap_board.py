@@ -104,6 +104,41 @@ class SnapBoard(casperfpga.CasperFpga):
             self.adc.calibrate()
         self.logger.info("Programming complete.")
 
+    def upload_to_ram_and_program(self, filename, port=-1, timeout=10,
+                                  wait_complete=True,
+                                  gain=1, demux_mode=1, chips=('a', 'b', 'c')):
+        """
+        Upload an FPG file to RAM and then program the FPGA.
+        :param filename: the file to upload
+        :param port: the port to use on the rx end, -1 means a random port
+        :param timeout: how long to wait, seconds
+        :param wait_complete: wait for the transaction to complete, return
+        after upload if False
+        :return:
+        """
+        rv = self.transport.upload_to_ram_and_program(
+            filename, port, timeout, wait_complete)
+        if filename[-3:] == 'fpg':
+            self.get_system_information(filename)
+
+        if self.is_adc16_based():
+            self.logger.info("Design is ADC16 based. Calibration routines will run.")
+
+            # Check in case SnapAdc is already setup
+            if self.uses_adc:
+                if not isinstance(self.adc, SnapAdc):
+                    self.adc = SnapAdc(self)
+            self.fpga_set_demux(1)
+            self.adc.set_chip_select(chips)
+            self.adc.initialize()
+            self.adc.set_demux(demux_mode)
+            self.adc.set_gain(gain)
+            self.adc.power_cycle()
+            self.adc.calibrate()
+        self.logger.info("Programming complete.")
+
+        return rv
+
     def set_debug(self):
         """ Set logger levels to output debug info """
         self.logger.setLevel(5)
