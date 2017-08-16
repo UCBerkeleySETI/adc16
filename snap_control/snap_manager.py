@@ -13,7 +13,12 @@ from .snap_plot import demux_data
 import logging
 import numpy as np
 from datetime import datetime
-import hickle as hkl
+
+try:
+    import hickle as hkl
+    HAS_HKL = True
+except:
+    HAS_HKL = False
 
 from multiprocessing import JoinableQueue
 
@@ -150,13 +155,16 @@ class SnapManager(object):
     def save_adc_snapshot(self, filename=None):
         d = self.grab_adc_snapshot()
 
-        print("Saving data...")
+        if HAS_HKL:
+            print("Saving data...")
 
-        if filename is None:
-            now = datetime.now()
-            now_str = now.strftime("%Y-%m-%d-%H%M%S")
-            filename = 'adc_snapshot_%s.hkl' % now_str
-        hkl.dump(d, filename)
-        print("OK")
+            if filename is None:
+                now = datetime.now()
+                now_str = now.strftime("%Y-%m-%d-%H%M%S")
+                filename = 'adc_snapshot_%s.hkl' % now_str
+            hkl.dump(d, filename)
+            print("OK")
+        else:
+            print("Python hickle module not installed, cannot export data.")
 
 

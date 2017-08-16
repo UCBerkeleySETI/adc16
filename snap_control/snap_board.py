@@ -60,58 +60,6 @@ class SnapBoard(casperfpga.KatcpFpga):
     def __repr__(self):
 
         return "<SnapBoard host: %s port: %s>" % (self.host, self.katcp_port)
-
-    def _program(self, filename=None):
-        """
-        Program the FPGA with the specified binary file.
-        :param filename: name of file to program, can vary depending on the formats
-                         supported by the device. e.g. fpg, bof, bin
-        :return:
-        """
-
-        if filename is None:
-            self.logger.error('%s: cannot program with no filename given. '
-                         'Exiting.' % self.host)
-            raise RuntimeError('Cannot program with no filename given. '
-                               'Exiting.')
-
-        unhandled_informs = []
-
-        # set the unhandled informs callback
-        self.unhandled_inform_handler = \
-            lambda msg: unhandled_informs.append(msg)
-        reply, _ = self.katcprequest(name='progdev', request_timeout=10,
-                                     request_args=(filename, ))
-        self.unhandled_inform_handler = None
-        if reply.arguments[0] == 'ok':
-            complete_okay = False
-            for inf in unhandled_informs:
-                if (inf.name == 'fpga') and (inf.arguments[0] == 'ready'):
-                    complete_okay = True
-            if not complete_okay: # Modify to do an extra check
-                reply, _ = self.katcprequest(name='status', request_timeout=1)
-                # Not sure whether 1 second is a good timeout here
-                if reply.arguments[0] == 'ok':
-                    complete_okay = True
-                else:
-                    self.logger.error('%s: programming %s failed.' %
-                                 (self.host, filename))
-                    for inf in unhandled_informs:
-                        LOGGER.debug(inf)
-                    raise RuntimeError('%s: programming %s failed.' %
-                                       (self.host, filename))
-            self.system_info['last_programmed'] = filename
-        else:
-            self.logger.error('%s: progdev request %s failed.' %
-                         (self.host, filename))
-            raise RuntimeError('%s: progdev request %s failed.' %
-                               (self.host, filename))
-        if filename[-3:] == 'fpg':
-            self.get_system_information()
-        else:
-            self.logger.info('%s: %s is not an fpg file, could not parse '
-                        'system information.' % (self.host, filename))
-        self.logger.info('%s: programmed %s okay.' % (self.host, filename))
     
     def est_brd_clk(self):
         """Returns the approximate clock rate of the FPGA in MHz.
@@ -138,7 +86,7 @@ class SnapBoard(casperfpga.KatcpFpga):
         # Make a dictionary out of chips specified on command line.
         # mapping chip letters to numbers to facilitate writing to adc16_controller
         self.logger.info("Programming with %s - gain %i demux %i" % (boffile, gain, demux_mode))
-        self._program(boffile)
+        self.transport.program(boffile)
 
         if self.is_adc16_based():
             self.logger.info("Design is ADC16 based. Calibration routines will run.")
