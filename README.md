@@ -1,3 +1,5 @@
+__This repo contains BL-specific code, unlikely to be useful outside the project. Newer users of CASPER SNAP boards should check out [casper-astro/casperfpga](https://github.com/casper-astro/casperfpga)__
+
 ## ADC16 calibration and control
 
 This repository houses calibration and control scripts for the HMCAD1511 ADC chips on the CASPER SNAP board.
